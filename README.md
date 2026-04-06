@@ -1,4 +1,14 @@
+<div align="center">
+  <img src="frontend/static/android-chrome-192x192.png" alt="Grimoire" width="96">
+</div>
+
 # Grimoire — Self-Hosted TTRPG Library Manager
+
+[![CI](https://github.com/hunter-read/grimoire/actions/workflows/ci.yml/badge.svg)](https://github.com/hunter-read/grimoire/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![React](https://img.shields.io/badge/react-18-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![License](https://img.shields.io/github/license/hunter-read/grimoire)](LICENSE)
+[![Docker](https://img.shields.io/docker/pulls/hunterreadca/grimoire?logo=docker&logoColor=white)](https://hub.docker.com/r/hunterreadca/grimoire)
 
 A Docker-based web application for managing your tabletop RPG PDF collection. Browse, search, and read your entire library from any device with a clean, responsive UI.
 

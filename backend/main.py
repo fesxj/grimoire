@@ -144,8 +144,9 @@ app.include_router(api)
 
 @app.get("/{full_path:path}")
 def serve_frontend(full_path: str, _: Request):
-    candidate = os.path.join(FRONTEND_DIR, full_path)
-    if full_path and os.path.isfile(candidate):
+    frontend_real = os.path.realpath(FRONTEND_DIR)
+    candidate = os.path.realpath(os.path.join(FRONTEND_DIR, full_path))
+    if full_path and candidate.startswith(frontend_real + os.sep) and os.path.isfile(candidate):
         return FileResponse(candidate)
     index_path = os.path.join(FRONTEND_DIR, "index.html")
     if os.path.exists(index_path):

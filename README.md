@@ -31,6 +31,26 @@ A Docker-based web application for managing your tabletop RPG PDF collection. Br
 
 ---
 
+## Screenshots
+
+| Library | Reader |
+|---------|--------|
+| ![Library](docs/images/library.png) | ![Reader](docs/images/reader.png) |
+
+| Search | Favorites |
+|--------|-----------|
+| ![Search](docs/images/search.png) | ![Favorites](docs/images/favorites.png) |
+
+| Maps | Tokens |
+|------|--------|
+| ![Maps](docs/images/maps.png) | ![Tokens](docs/images/tokens.png) |
+
+| Campaigns | Scheduling |
+|-----------|------------|
+| ![Campaigns](docs/images/campaigns.png) | ![Scheduling](docs/images/scheduling.png) |
+
+---
+
 ## Quick Start
 
 ### 1. Organise your library

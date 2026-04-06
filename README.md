@@ -1,14 +1,15 @@
 <div align="center">
-  <img src="frontend/static/android-chrome-192x192.png" alt="Grimoire" width="96">
+  <img src="frontend/static/android-chrome-192x192.png" alt="Grimoire" width="144">
+
+  # Grimoire — Self-Hosted TTRPG Library Manager
+
+  [![CI](https://github.com/hunter-read/grimoire/actions/workflows/ci.yml/badge.svg)](https://github.com/hunter-read/grimoire/actions/workflows/ci.yml)
+  [![Python](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
+  [![React](https://img.shields.io/badge/react-18-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+  [![License](https://img.shields.io/github/license/hunter-read/grimoire)](LICENSE)
+  [![Docker](https://img.shields.io/docker/pulls/hunterreadca/grimoire?logo=docker&logoColor=white)](https://hub.docker.com/r/hunterreadca/grimoire)
 </div>
 
-# Grimoire — Self-Hosted TTRPG Library Manager
-
-[![CI](https://github.com/hunter-read/grimoire/actions/workflows/ci.yml/badge.svg)](https://github.com/hunter-read/grimoire/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![React](https://img.shields.io/badge/react-18-61DAFB?logo=react&logoColor=white)](https://react.dev/)
-[![License](https://img.shields.io/github/license/hunter-read/grimoire)](LICENSE)
-[![Docker](https://img.shields.io/docker/pulls/hunterreadca/grimoire?logo=docker&logoColor=white)](https://hub.docker.com/r/hunterreadca/grimoire)
 
 A Docker-based web application for managing your tabletop RPG PDF collection. Browse, search, and read your entire library from any device with a clean, responsive UI.
 
@@ -164,6 +165,8 @@ Folder name matching is **case-insensitive**, and hyphens, underscores, and spac
 | Homebrew | `homebrew`, `custom`, `house-rules` | Community/custom content, house rules |
 
 > Files placed directly in a system folder (not in a subfolder) default to the **core** category.
+>
+> Any subfolder name that doesn't match the recognised keywords becomes its own category, slugified from the folder name. For example, a folder named `Bestiary` becomes the `bestiary` category.
 >
 > After adding new files, use **Rescan** in the sidebar (or Settings → Maintenance) to pick up the changes.
 
@@ -336,7 +339,7 @@ docker compose up -d
 | Role | What they can do |
 |---|---|
 | `admin` | Everything — user management, app settings, metadata editing, rescan |
-| `gm` | Read everything, edit metadata, rescan library, create GM campaigns |
+| `gm` | Read everything, edit metadata, create GM campaigns |
 | `player` | Read-only access, personal campaigns, session notes |
 
 Create additional accounts in **Settings → Users** after logging in as admin.

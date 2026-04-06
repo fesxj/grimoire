@@ -1,0 +1,100 @@
+:root {
+  --bg-deep: #0d0b0a;
+  --bg-panel: #1a1614;
+  --bg-card: #231f1b;
+  --bg-card-hover: #2d2721;
+  --bg-input: #151210;
+  --border: #3a322a;
+  --border-light: #4a4038;
+  --gold: #c9a84c;
+  --gold-dim: #a88e44;
+  --gold-bright: #e8c95a;
+  --amber: #d4913a;
+  --text: #e8e0d4;
+  --text-dim: #b8ab9b;
+  --text-muted: #968879;
+  --red: #d96050;
+  --green: #5a9a5a;
+  --blue: #4a7a9a;
+  --tag-bg: #2a2420;
+  --tag-border: #4a3e34;
+  --mark-bg: rgba(201, 168, 76, 0.3);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: 'Alegreya Sans', sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Cinzel', serif;
+  font-weight: 600;
+  color: var(--gold);
+  letter-spacing: 0.02em;
+}
+
+mark {
+  background: var(--mark-bg);
+  color: var(--gold-bright);
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+input, textarea, select {
+  font-family: 'Alegreya Sans', sans-serif;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(201, 168, 76, 0.25);
+}
+
+button {
+  font-family: 'Alegreya Sans', sans-serif;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: all 0.15s;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+a { color: var(--gold); text-decoration: none; }
+a:hover { color: var(--gold-bright); }
+a:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; border-radius: 2px; }
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.8; }
+}

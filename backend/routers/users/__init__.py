@@ -1,0 +1,39 @@
+"""Users package — registers all user routes on a single router."""
+from fastapi import APIRouter
+
+from .core import list_users, create_user, update_user, delete_user
+from .me import update_own_preferences, change_own_password, delete_own_account
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+# --- Collection ---
+router.add_api_route("", list_users, methods=["GET"], summary="List all users")
+router.add_api_route("", create_user, methods=["POST"], summary="Create a user", status_code=201)
+
+# --- Self-service (registered before /{user_id} to avoid routing conflict) ---
+router.add_api_route(
+    "/me/preferences", update_own_preferences, methods=["PATCH"], summary="Update own preferences"
+)
+router.add_api_route(
+    "/me/password", change_own_password, methods=["PATCH"], summary="Change own password"
+)
+router.add_api_route(
+    "/me", delete_own_account, methods=["DELETE"], summary="Delete own account", status_code=204
+)
+
+# --- Admin single-user operations ---
+router.add_api_route(
+    "/{user_id}",
+    update_user,
+    methods=["PATCH"],
+    summary="Update user role or password",
+    description="Change a user's role or reset their password. Cannot demote the last admin.",
+)
+router.add_api_route(
+    "/{user_id}",
+    delete_user,
+    methods=["DELETE"],
+    summary="Delete a user",
+    description="Permanently deletes a user. Cannot delete yourself or the last admin.",
+    status_code=204,
+)

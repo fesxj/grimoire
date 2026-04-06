@@ -1,0 +1,485 @@
+"""Library scanner, PDF indexer, and metadata fetcher for Grimoire."""
+
+import os
+import re
+import json
+import logging
+import hashlib
+from pathlib import Path
+import fitz  # PyMuPDF
+from PIL import Image
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from .models import GameSystem, Book, GenericMap, MapFolder, Token, TokenFolder
+
+logger = logging.getLogger("grimoire.indexer")
+
+CATEGORY_MAP = {
+    "core": ["core", "rulebook", "rules", "phb", "dmg", "mm", "basic"],
+    "supplement": ["supplement", "expansion", "sourcebook", "guide", "companion"],
+    "adventure": ["adventure", "module", "campaign", "scenario", "quest"],
+    "character-sheet": ["character sheet", "charsheet"],
+    "map": ["map", "battlemap", "battle map", "dungeon map"],
+    "handout": ["handout", "reference", "cheat", "quick ref", "screen"],
+    "homebrew": ["homebrew", "custom", "house rules"],
+    "starter-set": ["starter set", "starter kit", "beginner box", "boxed set", "essentials"],
+}
+
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".tiff", ".svg"}
+PDF_EXTS = {".pdf"}
+DOC_EXTS = {".pdf", ".epub", ".djvu"}
+MAP_IMAGE_EXTS = IMAGE_EXTS | PDF_EXTS
+
+
+def slugify(name: str) -> str:
+    """Create a URL-safe slug from a name."""
+    slug = name.lower().strip()
+    slug = re.sub(r"[^\w\s-]", "", slug)
+    slug = re.sub(r"[\s_]+", "-", slug)
+    slug = re.sub(r"-+", "-", slug)
+    return slug.strip("-")
+
+
+def _normalize_folder(name: str) -> str:
+    """Collapse hyphens, underscores, and whitespace to a single space for category matching."""
+    return re.sub(r"[-_\s]+", " ", name.lower()).strip()
+
+
+def guess_category(filepath: str) -> str:
+    """Infer book category from path segments, innermost folder takes priority."""
+    segments = filepath.replace("\\", "/").split("/")
+    for segment in reversed(segments[:-1]):
+        normalized = _normalize_folder(segment)
+        for category, keywords in CATEGORY_MAP.items():
+            if any(kw in normalized for kw in keywords):
+                return category
+    # 4+ segments means a named subfolder exists under the system root
+    if len(segments) > 3:
+        return slugify(segments[2])
+    return "core"
+
+
+def generate_thumbnail(filepath: str, output_path: str, size: tuple = (300, 400)) -> bool:
+    """Generate a thumbnail from the first page of a PDF or from an image."""
+    try:
+        ext = Path(filepath).suffix.lower()
+        if ext == ".pdf":
+            doc = fitz.open(filepath)
+            if len(doc) == 0:
+                return False
+            page = doc[0]
+            mat = fitz.Matrix(2, 2)  # 2x render for quality before downsizing
+            pix = page.get_pixmap(matrix=mat, alpha=False)
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            doc.close()
+        elif ext in IMAGE_EXTS:
+            img = Image.open(filepath)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+        else:
+            return False
+
+        img.thumbnail(size, Image.LANCZOS)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        img.save(output_path, "WEBP", quality=80)
+        return True
+    except Exception as e:
+        logger.warning(f"Thumbnail generation failed for {filepath}: {e}")
+        return False
+
+
+def extract_text_from_pdf(filepath: str) -> list[dict]:
+    """Extract text from all pages of a PDF. Returns list of {page, content}."""
+    pages = []
+    try:
+        doc = fitz.open(filepath)
+        for i, page in enumerate(doc):
+            page_text = page.get_text().strip()
+            if page_text:
+                pages.append({"page": i + 1, "content": page_text})
+        doc.close()
+    except Exception as e:
+        logger.error(f"Text extraction failed for {filepath}: {e}")
+    return pages
+
+
+def _count_eligible_files(directory: Path, extensions: set) -> int:
+    """Count non-hidden files with matching extensions under directory."""
+    count = 0
+    for root, dirs, files in os.walk(directory):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for f in files:
+            if not f.startswith(".") and Path(f).suffix.lower() in extensions:
+                count += 1
+    return count
+
+
+def scan_library(library_path: str, data_path: str, session: Session, on_progress=None):
+    """Scan the library directory and register all files in the database.
+
+    on_progress(scanned_books, total_books, scanned_maps, total_maps, scanned_tokens, total_tokens)
+    is called after each file is processed if provided.
+    """
+    library = Path(library_path)
+    books_dir = library / "books"
+    maps_dir = library / "maps"
+    tokens_dir = library / "tokens"
+    thumb_dir = Path(data_path) / "thumbnails"
+    stats = {
+        "new_systems": 0,
+        "new_books": 0,
+        "new_maps": 0,
+        "new_tokens": 0,
+        "indexed_pages": 0,
+        "errors": 0,
+    }
+
+    total_books = (
+        _count_eligible_files(books_dir, DOC_EXTS | IMAGE_EXTS) if books_dir.exists() else 0
+    )
+    total_maps = _count_eligible_files(maps_dir, MAP_IMAGE_EXTS) if maps_dir.exists() else 0
+    total_tokens = _count_eligible_files(tokens_dir, IMAGE_EXTS) if tokens_dir.exists() else 0
+    scanned_books = scanned_maps = scanned_tokens = 0
+
+    if on_progress:
+        on_progress(0, total_books, 0, total_maps, 0, total_tokens)
+
+    # --- Scan /books ---
+    if books_dir.exists():
+        for system_dir in sorted(books_dir.iterdir()):
+            if not system_dir.is_dir() or system_dir.name.startswith("."):
+                continue
+
+            raw_name = system_dir.name
+            is_nsfw = bool(re.search(r"\(nsfw\)", raw_name, re.IGNORECASE))
+            system_name = re.sub(r"\s*\(nsfw\)\s*", "", raw_name, flags=re.IGNORECASE).strip()
+            system_slug = slugify(system_name)
+
+            system = session.query(GameSystem).filter_by(slug=system_slug).first()
+            if not system:
+                system = GameSystem(name=system_name, slug=system_slug, is_explicit=is_nsfw)
+                session.add(system)
+                session.flush()
+                stats["new_systems"] += 1
+                logger.info(f"New game system: {system_name}" + (" [explicit]" if is_nsfw else ""))
+            elif is_nsfw and not system.is_explicit:
+                system.is_explicit = True
+
+            for root, dirs, files in os.walk(system_dir):
+                dirs[:] = [d for d in dirs if not d.startswith(".")]
+
+                for filename in sorted(files):
+                    if filename.startswith("."):
+                        continue
+
+                    filepath = os.path.join(root, filename)
+                    ext = Path(filename).suffix.lower()
+
+                    if ext not in DOC_EXTS and ext not in IMAGE_EXTS:
+                        continue
+
+                    scanned_books += 1
+                    if on_progress:
+                        on_progress(
+                            scanned_books,
+                            total_books,
+                            scanned_maps,
+                            total_maps,
+                            scanned_tokens,
+                            total_tokens,
+                        )
+
+                    relative_path = os.path.relpath(filepath, library_path)
+
+                    existing = session.query(Book).filter_by(filepath=filepath).first()
+                    if existing:
+                        continue
+
+                    category = guess_category(relative_path)
+                    title = Path(filename).stem.replace("_", " ").replace("-", " ").strip()
+
+                    book = Book(
+                        game_system_id=system.id,
+                        title=title,
+                        filename=filename,
+                        filepath=filepath,
+                        relative_path=relative_path,
+                        category=category,
+                        file_size=os.path.getsize(filepath),
+                        mime_type="application/pdf" if ext == ".pdf" else f"image/{ext[1:]}",
+                    )
+
+                    thumb_path = os.path.join(
+                        thumb_dir,
+                        "books",
+                        f"{slugify(title)}_{hashlib.md5(filepath.encode()).hexdigest()[:8]}.webp",
+                    )
+                    if generate_thumbnail(filepath, thumb_path):
+                        book.has_thumbnail = True
+
+                    if ext == ".pdf":
+                        try:
+                            doc = fitz.open(filepath)
+                            book.page_count = len(doc)
+                            doc.close()
+                        except Exception as e:
+                            book.index_error = str(e)[:500]
+                            stats["errors"] += 1
+
+                    session.add(book)
+                    try:
+                        session.commit()
+                        stats["new_books"] += 1
+                        logger.info(f"New book: {title} ({category}) in {system_name}")
+                    except IntegrityError:
+                        session.rollback()
+                        logger.debug(f"Book already exists, skipping: {filepath}")
+
+    if maps_dir.exists():
+        for root, dirs, files in os.walk(maps_dir):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+
+            for filename in sorted(files):
+                if filename.startswith("."):
+                    continue
+
+                filepath = os.path.join(root, filename)
+                ext = Path(filename).suffix.lower()
+
+                if ext not in MAP_IMAGE_EXTS:
+                    continue
+
+                scanned_maps += 1
+                if on_progress:
+                    on_progress(
+                        scanned_books,
+                        total_books,
+                        scanned_maps,
+                        total_maps,
+                        scanned_tokens,
+                        total_tokens,
+                    )
+
+                relative_path = os.path.relpath(filepath, library_path)
+
+                existing = session.query(GenericMap).filter_by(filepath=filepath).first()
+                if existing:
+                    continue
+
+                title = Path(filename).stem.replace("_", " ").replace("-", " ").strip()
+
+                gmap = GenericMap(
+                    filename=filename,
+                    filepath=filepath,
+                    relative_path=relative_path,
+                    file_size=os.path.getsize(filepath),
+                )
+
+                thumb_path = os.path.join(
+                    thumb_dir,
+                    "maps",
+                    f"{slugify(title)}_{hashlib.md5(filepath.encode()).hexdigest()[:8]}.webp",
+                )
+                if generate_thumbnail(filepath, thumb_path):
+                    gmap.has_thumbnail = True
+
+                session.add(gmap)
+                try:
+                    session.commit()
+                    stats["new_maps"] += 1
+                except IntegrityError:
+                    session.rollback()
+                    logger.debug(f"Map already exists, skipping: {filepath}")
+
+    if tokens_dir.exists():
+        for root, dirs, files in os.walk(tokens_dir):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+
+            for filename in sorted(files):
+                if filename.startswith("."):
+                    continue
+
+                filepath = os.path.join(root, filename)
+                ext = Path(filename).suffix.lower()
+
+                if ext not in IMAGE_EXTS:
+                    continue
+
+                scanned_tokens += 1
+                if on_progress:
+                    on_progress(
+                        scanned_books,
+                        total_books,
+                        scanned_maps,
+                        total_maps,
+                        scanned_tokens,
+                        total_tokens,
+                    )
+
+                relative_path = os.path.relpath(filepath, library_path)
+
+                existing = session.query(Token).filter_by(filepath=filepath).first()
+                if existing:
+                    continue
+
+                title = Path(filename).stem.replace("_", " ").replace("-", " ").strip()
+
+                token = Token(
+                    filename=filename,
+                    filepath=filepath,
+                    relative_path=relative_path,
+                    file_size=os.path.getsize(filepath),
+                )
+
+                thumb_path = os.path.join(
+                    thumb_dir,
+                    "tokens",
+                    f"{slugify(title)}_{hashlib.md5(filepath.encode()).hexdigest()[:8]}.webp",
+                )
+                if generate_thumbnail(filepath, thumb_path, size=(200, 200)):
+                    token.has_thumbnail = True
+
+                session.add(token)
+                try:
+                    session.commit()
+                    stats["new_tokens"] += 1
+                except IntegrityError:
+                    session.rollback()
+                    logger.debug(f"Token already exists, skipping: {filepath}")
+
+    _apply_tags_from_library(library_path, session)
+
+    return stats
+
+
+def _load_tags_json(folder_path: str) -> dict:
+    """Read and parse tags.json from folder_path.
+
+    Returns a dict mapping relative keys to tag lists.  Returns {} on any
+    error or if the file does not exist.
+    """
+    tags_file = Path(folder_path) / "tags.json"
+    if not tags_file.exists():
+        return {}
+    try:
+        raw = json.loads(tags_file.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            logger.warning(f"tags.json at {folder_path} must be a JSON object — skipped")
+            return {}
+        result = {}
+        for key, val in raw.items():
+            if isinstance(val, list):
+                result[key] = [str(t).strip() for t in val if str(t).strip()]
+        return result
+    except Exception as exc:
+        logger.warning(f"tags.json at {folder_path} could not be parsed: {exc}")
+        return {}
+
+
+def _apply_tags_from_library(library_path: str, session: Session) -> None:
+    """Apply tags declared in tags.json files throughout the library tree."""
+    library = Path(library_path)
+
+    for section in ("maps", "tokens"):
+        section_dir = library / section
+        if not section_dir.exists():
+            continue
+
+        folder_model = MapFolder if section == "maps" else TokenFolder
+        file_model = GenericMap if section == "maps" else Token
+
+        for root, dirs, files in os.walk(section_dir):
+            dirs[:] = [d for d in dirs if not d.startswith(".")]
+
+            if "tags.json" not in files:
+                continue
+
+            tag_map = _load_tags_json(root)
+            if not tag_map:
+                continue
+
+            root_path = Path(root)
+
+            for key, tags in tag_map.items():
+                if not tags:
+                    continue
+
+                if key == ".":
+                    folder_rel = str(os.path.relpath(root, section_dir))
+                    record = session.query(folder_model).filter_by(path=folder_rel).first()
+                    if record:
+                        record.tags = tags
+                    else:
+                        session.add(folder_model(path=folder_rel, tags=tags))
+                    logger.debug(f"tags.json: folder {folder_rel} ← {tags}")
+                else:
+                    target = root_path / key
+                    if target.is_dir():
+                        folder_rel = str(os.path.relpath(target, section_dir))
+                        record = session.query(folder_model).filter_by(path=folder_rel).first()
+                        if record:
+                            record.tags = tags
+                        else:
+                            session.add(folder_model(path=folder_rel, tags=tags))
+                        logger.debug(f"tags.json: folder {folder_rel} ← {tags}")
+                    else:
+                        file_rel = os.path.relpath(target, library_path)
+                        record = session.query(file_model).filter_by(relative_path=file_rel).first()
+                        if record:
+                            record.tags = tags
+                            logger.debug(f"tags.json: file {file_rel} ← {tags}")
+                        else:
+                            logger.debug(f"tags.json: no record found for {file_rel}")
+
+    # --- books/ section (system-level tags only) ---
+    books_dir = library / "books"
+    if books_dir.exists():
+        for system_dir in sorted(books_dir.iterdir()):
+            if not system_dir.is_dir() or system_dir.name.startswith("."):
+                continue
+
+            tag_map = _load_tags_json(str(system_dir))
+            if not tag_map or "." not in tag_map:
+                continue
+
+            tags = tag_map["."]
+            if not tags:
+                continue
+
+            system_slug = slugify(system_dir.name)
+            system = session.query(GameSystem).filter_by(slug=system_slug).first()
+            if system:
+                system.tags = tags
+                logger.debug(f"tags.json: system {system_dir.name} ← {tags}")
+
+    session.commit()
+
+
+def index_book_text(book: Book, data_path: str, session: Session):
+    """Extract and index text from a PDF for full-text search."""
+    if book.indexed or book.mime_type != "application/pdf":
+        return False
+
+    pages = extract_text_from_pdf(book.filepath)
+    if not pages:
+        book.index_error = "No text extracted"
+        book.indexed = True
+        session.commit()
+        return False
+
+    # Insert into FTS5 table
+    for page_data in pages:
+        session.execute(
+            text(
+                "INSERT INTO book_search (book_id, page_number, content) VALUES (:bid, :pnum, :content)"
+            ),
+            {"bid": book.id, "pnum": page_data["page"], "content": page_data["content"]},
+        )
+
+    book.indexed = True
+    book.index_error = ""
+    session.commit()
+    logger.info(f"Indexed {len(pages)} pages for: {book.title}")
+    return True

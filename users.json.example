@@ -1,0 +1,24 @@
+[
+  {
+    "username": "admin",
+    "password": "changeme",
+    "role": "admin"
+  },
+  {
+    "username": "gm",
+    "password": "$bcrypt-sha256$v=2,t=2b,r=12$QFs8U/QOmIfwGmZkse1aF.$JMGeayMXkCYVKsMmr8q0kaF6ISy2yRS",
+    "role": "gm"
+  },
+  {
+    "username": "alice",
+    "password": "alicepassword",
+    "role": "player",
+    "denyExplicit": false
+  },
+  {
+    "username": "bob",
+    "password": "bobpassword",
+    "role": "player",
+    "denyExplicit": true
+  }
+]

@@ -1,0 +1,254 @@
+import { useState } from 'react'
+import { LuFolder, LuChevronDown, LuChevronRight, LuTag, LuCheck, LuMinus } from 'react-icons/lu'
+import MapCard from './MapCard'
+import InlineTagEditor from './InlineTagEditor'
+import LazyGrid from '../LazyGrid'
+import { toTitleCase } from '../../utils'
+
+function FolderCheckbox({ checked, indeterminate, onChange }) {
+  return (
+    <div
+      onClick={e => { e.stopPropagation(); onChange() }}
+      style={{
+        width: 18, height: 18, borderRadius: 4, flexShrink: 0,
+        background: checked || indeterminate ? 'var(--gold)' : 'rgba(0,0,0,0.4)',
+        border: checked || indeterminate ? 'none' : '2px solid rgba(255,255,255,0.3)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+      }}
+    >
+      {checked && <LuCheck size={11} color="var(--bg-deep)" strokeWidth={3} />}
+      {indeterminate && !checked && <LuMinus size={11} color="var(--bg-deep)" strokeWidth={3} />}
+    </div>
+  )
+}
+
+const isMobilePhone = window.matchMedia('(max-width: 640px)').matches
+
+export default function MapFolderGroup({ folder, subfolders, collapsed, onToggle, folderTags, editingFolder, onSetEditingFolder, onSaveFolderTags, onSelectMap, bulkMode, selectedMapIds, selectedFolderPaths, onToggleMap, onToggleFolder, cardSize = 'comfortable', canTag = true }) {
+  const [editingRoot, setEditingRoot] = useState(false)
+  const isCollapsed = collapsed.has(folder)
+  const allMapsInGroup = Object.values(subfolders).flat()
+  const totalMaps = allMapsInGroup.length
+  const topLevelTags = folderTags[folder] ?? []
+
+  // Checked state for top-level folder header
+  const groupFolderChecked = selectedFolderPaths.has(folder) && allMapsInGroup.every(m => selectedMapIds.has(m.id))
+  const groupFolderIndeterminate = !groupFolderChecked && (
+    selectedFolderPaths.has(folder) || allMapsInGroup.some(m => selectedMapIds.has(m.id))
+  )
+
+  const subfolderEntries = Object.entries(subfolders).sort(([a], [b]) => {
+    if (a === '') return 1
+    if (b === '') return -1
+    return a.localeCompare(b)
+  })
+
+  return (
+    <div style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+      {/* Folder header */}
+      <div style={{
+        padding: '12px 20px',
+        background: 'var(--bg-panel)',
+        borderBottom: isCollapsed ? 'none' : '1px solid var(--border)',
+      }}>
+        {/* Top row: chevron + icon + name + dot leader + count */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {bulkMode && (
+            <FolderCheckbox
+              checked={groupFolderChecked}
+              indeterminate={groupFolderIndeterminate}
+              onChange={() => onToggleFolder(folder, allMapsInGroup)}
+            />
+          )}
+          <button
+            onClick={() => onToggle(folder)}
+            aria-expanded={!isCollapsed}
+            aria-label={isCollapsed ? `Expand ${folder}` : `Collapse ${folder}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0, flex: 1, minWidth: 0, overflow: 'hidden' }}
+          >
+            {isCollapsed
+              ? <LuChevronRight size={16} color="var(--gold-dim)" style={{ flexShrink: 0 }} />
+              : <LuChevronDown size={16} color="var(--gold-dim)" style={{ flexShrink: 0 }} />
+            }
+            <LuFolder size={16} color="var(--gold-dim)" style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 18, color: 'var(--gold-dim)', fontFamily: 'Cinzel, serif', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              {toTitleCase(folder)}
+            </span>
+            {!isMobilePhone && <span style={{ flex: 1, borderBottom: '1px dotted var(--border)', margin: '0 8px', minWidth: 16 }} />}
+          </button>
+          <span style={{ fontSize: 14, color: 'var(--text-muted)', flexShrink: 0 }}>
+            {totalMaps} map{totalMaps !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        {/* Tags row (desktop only — mobile shows tags below when expanded) */}
+        {!bulkMode && !isMobilePhone && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 8, paddingLeft: 52 }}>
+            {editingRoot ? (
+              <InlineTagEditor
+                tags={topLevelTags}
+                onSave={(newTags) => onSaveFolderTags(folder, newTags)}
+                onCancel={() => setEditingRoot(false)}
+              />
+            ) : (
+              <>
+                {topLevelTags.map(t => <span key={t} style={tagPillStyle}>{t.charAt(0).toUpperCase() + t.slice(1)}</span>)}
+                {canTag && (
+                  <button
+                    onClick={() => setEditingRoot(true)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, padding: '2px 6px' }}
+                  >
+                    <LuTag size={11} /> {topLevelTags.length > 0 ? 'Edit' : 'Add tags'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Subfolders + maps */}
+      {!isCollapsed && (
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {isMobilePhone && !bulkMode && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {editingRoot ? (
+                <InlineTagEditor
+                  tags={topLevelTags}
+                  onSave={(newTags) => onSaveFolderTags(folder, newTags)}
+                  onCancel={() => setEditingRoot(false)}
+                />
+              ) : (
+                <>
+                  {topLevelTags.map(t => <span key={t} style={tagPillStyle}>{t.charAt(0).toUpperCase() + t.slice(1)}</span>)}
+                  {canTag && (
+                    <button
+                      onClick={() => setEditingRoot(true)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, padding: '2px 6px' }}
+                    >
+                      <LuTag size={11} /> {topLevelTags.length > 0 ? 'Edit tags' : 'Add tags'}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+          {subfolderEntries.map(([subPath, subMaps]) => {
+            const folderPath = subPath ? `${folder}/${subPath}` : folder
+            const tags = folderTags[folderPath] ?? []
+            const editKey = `${folder}::${subPath}`
+            const isSubCollapsed = subPath ? collapsed.has(editKey) : false
+
+            const subChecked = subPath && selectedFolderPaths.has(folderPath) && subMaps.every(m => selectedMapIds.has(m.id))
+            const subIndeterminate = subPath && !subChecked && (
+              selectedFolderPaths.has(folderPath) || subMaps.some(m => selectedMapIds.has(m.id))
+            )
+
+            return (
+              <div key={editKey}>
+                {subPath ? (
+                  <div style={{ marginBottom: isSubCollapsed ? 0 : 12 }}>
+                    {/* Top row: checkbox + name + count */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {bulkMode && (
+                        <FolderCheckbox
+                          checked={subChecked}
+                          indeterminate={subIndeterminate}
+                          onChange={() => onToggleFolder(folderPath, subMaps)}
+                        />
+                      )}
+                      <button
+                        onClick={() => onToggle(editKey)}
+                        aria-expanded={!isSubCollapsed}
+                        aria-label={isSubCollapsed ? `Expand ${subPath}` : `Collapse ${subPath}`}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 2px', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, overflow: 'hidden' }}
+                      >
+                        {isSubCollapsed
+                          ? <LuChevronRight size={13} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                          : <LuChevronDown size={13} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                        }
+                        <LuFolder size={13} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+                        <span style={{ fontSize: 15, color: 'var(--text-dim)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {subPath.split('/').map(toTitleCase).join(' / ')}
+                        </span>
+                        <span style={{ fontSize: 13, color: 'var(--text-muted)', flexShrink: 0 }}>({subMaps.length})</span>
+                      </button>
+                      {editingFolder !== editKey && !bulkMode && !isMobilePhone && (
+                        <>
+                          {tags.map(t => <span key={t} style={tagPillStyle}>{t.charAt(0).toUpperCase() + t.slice(1)}</span>)}
+                          {canTag && (
+                            <button
+                              onClick={() => onSetEditingFolder(editKey)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, padding: '2px 6px' }}
+                            >
+                              <LuTag size={11} /> {tags.length > 0 ? 'Edit' : 'Add tags'}
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {editingFolder === editKey && !isMobilePhone && (
+                        <InlineTagEditor
+                          tags={tags}
+                          onSave={(newTags) => onSaveFolderTags(folderPath, newTags)}
+                          onCancel={() => onSetEditingFolder(null)}
+                        />
+                      )}
+                    </div>
+                    {/* Tags row (mobile only) */}
+                    {isMobilePhone && !bulkMode && (
+                      <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        {editingFolder === editKey ? (
+                          <InlineTagEditor
+                            tags={tags}
+                            onSave={(newTags) => onSaveFolderTags(folderPath, newTags)}
+                            onCancel={() => onSetEditingFolder(null)}
+                          />
+                        ) : (
+                          <>
+                            {tags.map(t => <span key={t} style={tagPillStyle}>{t.charAt(0).toUpperCase() + t.slice(1)}</span>)}
+                            {canTag && (
+                              <button
+                                onClick={() => onSetEditingFolder(editKey)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3, fontSize: 12, padding: '2px 6px' }}
+                              >
+                                <LuTag size={11} /> {tags.length > 0 ? 'Edit tags' : 'Add tags'}
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: 12 }} />
+                )}
+
+                {!isSubCollapsed && (
+                  <LazyGrid count={subMaps.length} cardSize={cardSize}>
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fill, minmax(${cardSize === 'compact' ? '140px' : '200px'}, 1fr))`, gap: 16 }}>
+                      {subMaps.map(m => (
+                        <MapCard
+                          key={m.id}
+                          map={m}
+                          onClick={() => onSelectMap(m.id)}
+                          bulkMode={bulkMode}
+                          selected={selectedMapIds?.has(m.id)}
+                          onToggle={() => onToggleMap(m.id)}
+                        />
+                      ))}
+                    </div>
+                  </LazyGrid>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const tagPillStyle = {
+  fontSize: 12, padding: '2px 8px', borderRadius: 10,
+  background: 'var(--tag-bg)', border: '1px solid var(--tag-border)', color: 'var(--text-dim)',
+}

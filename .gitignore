@@ -1,0 +1,13 @@
+data/
+library/books/*
+library/maps/*
+!library/books/.gitkeep
+!library/maps/.gitkeep
+!library/tokens/.gitkeep
+__pycache__/
+*.pyc
+.env
+*.db
+.DS_Store
+frontend/node_modules
+frontend/dist

@@ -1,0 +1,64 @@
+"""Maps package — registers all map routes on a single router."""
+from fastapi import APIRouter
+
+from .core import (
+    list_maps,
+    list_map_folders,
+    update_map_folder,
+    get_map,
+    serve_map_file,
+    serve_map_thumbnail,
+    update_map,
+)
+
+router = APIRouter(tags=["maps"])
+
+router.add_api_route(
+    "/maps",
+    list_maps,
+    methods=["GET"],
+    summary="List maps",
+    description="Returns a paginated list of maps. Filter by `map_type`.",
+)
+router.add_api_route(
+    "/map-folders",
+    list_map_folders,
+    methods=["GET"],
+    summary="List map folders",
+    description="Returns all known map folder paths and their associated tags.",
+)
+router.add_api_route(
+    "/map-folders",
+    update_map_folder,
+    methods=["PATCH"],
+    summary="Set tags on a map folder",
+    description="Creates or replaces the tag list for a folder path. GM or admin role required.",
+)
+router.add_api_route(
+    "/maps/{map_id}",
+    get_map,
+    methods=["GET"],
+    summary="Get a map",
+    description="Returns full map metadata including pixel dimensions, DPI, detected grid size, and folder tags.",
+)
+router.add_api_route(
+    "/maps/{map_id}/file",
+    serve_map_file,
+    methods=["GET"],
+    summary="Download map file",
+    description="Streams the original map image or PDF. Accepts `?token=` for browser-embedded images.",
+)
+router.add_api_route(
+    "/maps/{map_id}/thumbnail",
+    serve_map_thumbnail,
+    methods=["GET"],
+    summary="Map thumbnail",
+    description="Returns the pregenerated WebP thumbnail for a map. 404 if not yet generated.",
+)
+router.add_api_route(
+    "/maps/{map_id}",
+    update_map,
+    methods=["PATCH"],
+    summary="Update map metadata",
+    description="Updates editable fields on a map (description, tags, map_type, grid_size). GM or admin role required.",
+)

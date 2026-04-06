@@ -1,0 +1,45 @@
+# Development compose — run with: docker compose -f docker-compose.dev.yml watch
+
+services:
+  grimoire:
+    build:
+      context: .
+    image: hunterreadca/grimoire
+    container_name: grimoire
+    restart: unless-stopped
+    ports:
+      - "9481:9481"
+    volumes:
+      - ./library:/library:ro
+      - ./data:/data
+    environment:
+      - LIBRARY_PATH=/library
+      - DATA_PATH=/data
+      - WORKERS=2
+      - SECRET_KEY=7ba05239cdd5752065eb6bd5db866bf8a0919d2760b1fcf158744f5ef5833834
+      - VALKEY_URL=redis://valkey:6379/0
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./backend
+          target: /app/backend
+          ignore:
+            - __pycache__
+            - "*.pyc"
+            - "*.pyo"
+        - action: rebuild
+          path: ./backend/requirements.txt
+        - action: rebuild
+          path: ./frontend/src
+        - action: rebuild
+          path: ./frontend/package.json
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: grimoire-valkey
+    restart: unless-stopped
+    volumes:
+      - valkey-data:/data
+
+volumes:
+  valkey-data:

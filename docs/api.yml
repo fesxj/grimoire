@@ -1,0 +1,1581 @@
+openapi: "3.1.0"
+
+info:
+  title: Grimoire
+  version: "1.0.0"
+  description: |
+    Self-hosted TTRPG library manager.
+
+    All endpoints except `/api/auth/status`, `/api/auth/setup`, and `/api/auth/login`
+    require a valid JWT passed as `Authorization: Bearer <token>`, or as a `?token=`
+    query parameter (required for browser-embedded images and file downloads).
+
+    **Roles:**
+    - `admin` — full access including user management and app settings
+    - `gm` — read everything, edit metadata, rescan library, manage campaigns
+    - `player` — read-only access
+
+servers:
+  - url: http://localhost:9481
+    description: Local instance
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    tokenParam:
+      type: apiKey
+      in: query
+      name: token
+    apiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+      required: [detail]
+
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        username: { type: string }
+        display_name: { type: string, nullable: true }
+        role: { type: string, enum: [admin, gm, player] }
+        allow_explicit: { type: boolean }
+        created_at: { type: string, format: date-time }
+
+    GameSystem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        publishers:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              url: { type: string }
+        character_builder_url: { type: string }
+        cover_image: { type: string }
+        tags: { type: array, items: { type: string } }
+        genre: { type: string }
+        is_explicit: { type: boolean }
+
+    Book:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        filename: { type: string }
+        category:
+          type: string
+          enum: [core, supplement, adventure, character-sheet, map, handout, homebrew, starter-set]
+        description: { type: string }
+        authors: { type: array, items: { type: string } }
+        publisher: { type: string }
+        publisher_url: { type: string }
+        year: { type: integer, nullable: true }
+        page_count: { type: integer }
+        file_size: { type: integer }
+        has_thumbnail: { type: boolean }
+        indexed: { type: boolean }
+        is_explicit: { type: boolean }
+        game_system_id: { type: string, format: uuid, nullable: true }
+
+    GenericMap:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        relative_path: { type: string }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        map_type: { type: string }
+        grid_size: { type: string }
+        file_size: { type: integer }
+        has_thumbnail: { type: boolean }
+
+    Token:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        filename: { type: string }
+        relative_path: { type: string }
+        description: { type: string }
+        tags: { type: array, items: { type: string } }
+        is_explicit: { type: boolean }
+        file_size: { type: integer }
+        has_thumbnail: { type: boolean }
+
+    Campaign:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        owner_id: { type: string, format: uuid }
+        owner_display_name: { type: string }
+        is_gm_campaign: { type: boolean }
+        gm_title: { type: string }
+        parent_campaign_id: { type: string, format: uuid, nullable: true }
+        system_id: { type: string, format: uuid, nullable: true }
+        has_schedule: { type: boolean }
+        members: { type: array, items: { $ref: "#/components/schemas/CampaignMember" } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CampaignMember:
+      type: object
+      properties:
+        user_id: { type: string, format: uuid }
+        username: { type: string }
+        display_name: { type: string, nullable: true }
+        status: { type: string, enum: [invited, accepted, declined] }
+        character_name: { type: string, nullable: true }
+
+    SessionNote:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        campaign_id: { type: string, format: uuid }
+        session_date: { type: string, format: date, example: "2026-01-15" }
+        title: { type: string }
+        player_notes: { type: array, items: { type: object } }
+        gm_note: { type: object, nullable: true }
+
+    Bookmark:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        book_id: { type: string, format: uuid }
+        page_number: { type: integer }
+        label: { type: string }
+        notes: { type: string }
+        selected_text: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    Stats:
+      type: object
+      properties:
+        game_systems: { type: integer }
+        books: { type: integer }
+        maps: { type: integer }
+        tokens: { type: integer }
+        indexed_books: { type: integer }
+        total_pages: { type: integer }
+        total_size_mb: { type: number }
+        version: { type: string }
+
+security:
+  - bearerAuth: []
+  - tokenParam: []
+
+paths:
+
+  # ── Auth ──────────────────────────────────────────────────────────────────
+
+  /api/auth/status:
+    get:
+      tags: [auth]
+      summary: Check initialization status
+      description: Returns whether the server has any users. Used by the frontend to decide whether to show the first-run setup screen.
+      security: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  initialized: { type: boolean }
+
+  /api/auth/setup:
+    post:
+      tags: [auth]
+      summary: First-run admin setup
+      description: Creates the initial admin account. Returns a JWT. Fails with 400 if any users already exist.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, minLength: 2 }
+                password: { type: string, minLength: 8 }
+      responses:
+        "200":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user: { $ref: "#/components/schemas/User" }
+        "400": { description: Already initialized }
+        "422": { description: Validation error }
+
+  /api/auth/login:
+    post:
+      tags: [auth]
+      summary: Log in
+      description: Authenticates with username and password. Returns a JWT valid for 30 days.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user: { $ref: "#/components/schemas/User" }
+        "401": { description: Invalid credentials }
+
+  /api/auth/me:
+    get:
+      tags: [auth]
+      summary: Get current user
+      description: Returns the authenticated user's id, username, display name, role, and preferences.
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { description: Not authenticated }
+
+  # ── Users ────────────────────────────────────────────────────────────────
+
+  /api/users:
+    get:
+      tags: [users]
+      summary: List users
+      description: Admin only.
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/User" }
+        "403": { description: Admin required }
+    post:
+      tags: [users]
+      summary: Create a user
+      description: Admin only. Role defaults to `player` if not specified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, minLength: 8 }
+                role: { type: string, enum: [admin, gm, player] }
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { description: Username already exists }
+        "403": { description: Admin required }
+
+  /api/users/{id}:
+    patch:
+      tags: [users]
+      summary: Update a user
+      description: Admin only. Update role, password, or explicit content permission.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role: { type: string, enum: [admin, gm, player] }
+                password: { type: string, minLength: 8 }
+                allow_explicit: { type: boolean }
+      responses:
+        "200": { description: Updated }
+        "400": { description: Cannot demote last admin }
+        "403": { description: Admin required }
+        "404": { description: User not found }
+    delete:
+      tags: [users]
+      summary: Delete a user
+      description: Admin only. Cannot delete self or the last admin.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Deleted }
+        "400": { description: Cannot delete self or last admin }
+        "403": { description: Admin required }
+        "404": { description: User not found }
+
+  /api/users/me/preferences:
+    patch:
+      tags: [users]
+      summary: Update own preferences
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name: { type: string, nullable: true }
+                allow_explicit: { type: boolean }
+      responses:
+        "200": { description: Updated }
+
+  /api/users/me/password:
+    patch:
+      tags: [users]
+      summary: Change own password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string }
+                new_password: { type: string, minLength: 8 }
+      responses:
+        "200": { description: Changed }
+        "400": { description: Current password incorrect }
+
+  /api/users/me:
+    delete:
+      tags: [users]
+      summary: Delete own account
+      description: Admin accounts cannot self-delete.
+      responses:
+        "204": { description: Deleted }
+        "400": { description: Admin accounts cannot self-delete }
+
+  # ── Library ───────────────────────────────────────────────────────────────
+
+  /api/stats:
+    get:
+      tags: [library]
+      summary: Library statistics
+      description: Accepts either a valid JWT or an `X-API-Key` header for external integrations.
+      security:
+        - bearerAuth: []
+        - tokenParam: []
+        - apiKeyHeader: []
+      responses:
+        "200":
+          description: Statistics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stats" }
+        "401": { description: Authentication required }
+
+  /api/scan-status:
+    get:
+      tags: [library]
+      summary: Scan status
+      description: Returns current scan state including running flag, phase, and progress counters.
+      responses:
+        "200":
+          description: Scan status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  running: { type: boolean }
+                  phase: { type: string, nullable: true, enum: [scanning, indexing, null] }
+                  scanned_books: { type: integer }
+                  total_books: { type: integer }
+                  scanned_maps: { type: integer }
+                  total_maps: { type: integer }
+                  scanned_tokens: { type: integer }
+                  total_tokens: { type: integer }
+                  new_books: { type: integer }
+                  new_maps: { type: integer }
+                  new_tokens: { type: integer }
+                  indexed: { type: integer }
+                  to_index: { type: integer }
+
+  /api/rescan:
+    post:
+      tags: [library]
+      summary: Rescan and reindex library
+      description: Triggers a background rescan. GM or admin role required.
+      responses:
+        "200":
+          description: Scan queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [scan_started, already_running] }
+        "403": { description: GM or admin required }
+
+  # ── Game Systems ──────────────────────────────────────────────────────────
+
+  /api/systems:
+    get:
+      tags: [systems]
+      summary: List game systems
+      description: Returns all game systems with book counts.
+      responses:
+        "200":
+          description: System list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/GameSystem" }
+
+  /api/systems/{id}:
+    get:
+      tags: [systems]
+      summary: Get a game system
+      description: Returns full system metadata with all books.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: System detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GameSystem" }
+        "404": { description: Not found }
+    patch:
+      tags: [systems]
+      summary: Update game system metadata
+      description: GM or admin role required.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                slug: { type: string }
+                description: { type: string }
+                publishers:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name: { type: string }
+                      url: { type: string }
+                character_builder_url: { type: string }
+                cover_image: { type: string }
+                tags: { type: array, items: { type: string } }
+                genre: { type: string }
+      responses:
+        "200": { description: Updated }
+        "403": { description: GM or admin required }
+        "404": { description: Not found }
+
+  # ── Books ─────────────────────────────────────────────────────────────────
+
+  /api/books:
+    get:
+      tags: [books]
+      summary: List books
+      description: Paginated book list. Explicit books are hidden if the user has explicit content disabled.
+      parameters:
+        - { in: query, name: system_id, schema: { type: string } }
+        - { in: query, name: category, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, default: 100, maximum: 500 } }
+        - { in: query, name: offset, schema: { type: integer, default: 0 } }
+      responses:
+        "200":
+          description: Book list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  books:
+                    type: array
+                    items: { $ref: "#/components/schemas/Book" }
+
+  /api/books/{id}:
+    get:
+      tags: [books]
+      summary: Get a book
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Book detail with game system
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Book" }
+        "403": { description: Explicit content disabled for account }
+        "404": { description: Not found }
+    patch:
+      tags: [books]
+      summary: Update book metadata
+      description: GM or admin role required.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+                category: { type: string }
+                description: { type: string }
+                authors: { type: array, items: { type: string } }
+                publisher: { type: string }
+                publisher_url: { type: string }
+                year: { type: integer, nullable: true }
+                is_explicit: { type: boolean }
+      responses:
+        "200": { description: Updated }
+        "403": { description: GM or admin required }
+        "404": { description: Not found }
+
+  /api/books/{id}/file:
+    get:
+      tags: [books]
+      summary: Download book file
+      description: Streams the raw book file. Accepts `?token=` for browser-embedded downloads.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: File stream }
+        "404": { description: Not found }
+
+  /api/books/{id}/thumbnail:
+    get:
+      tags: [books]
+      summary: Book cover thumbnail
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: WebP image }
+        "404": { description: No thumbnail available }
+
+  /api/books/{id}/toc:
+    get:
+      tags: [books]
+      summary: PDF table of contents
+      description: Returns the PDF outline as nested `{title, page, level, children}` entries.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: TOC
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  toc:
+                    type: array
+                    items: { type: object }
+
+  /api/books/{id}/page/{num}:
+    get:
+      tags: [books]
+      summary: Render a PDF page as WebP
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: num, required: true, schema: { type: integer } }
+        - { in: query, name: width, schema: { type: integer, default: 1200, maximum: 3000 } }
+      responses:
+        "200": { description: WebP image }
+        "400": { description: Page out of range }
+        "404": { description: Not found }
+
+  /api/books/{id}/page/{num}/text:
+    get:
+      tags: [books]
+      summary: Get page text
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: num, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Page text
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  text: { type: string }
+
+  /api/books/{id}/page/{num}/words:
+    get:
+      tags: [books]
+      summary: Get page word bounding boxes
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: num, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Word bounding boxes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  width: { type: number }
+                  height: { type: number }
+                  words:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        x0: { type: number }
+                        y0: { type: number }
+                        x1: { type: number }
+                        y1: { type: number }
+                        text: { type: string }
+
+  # ── Maps ──────────────────────────────────────────────────────────────────
+
+  /api/maps:
+    get:
+      tags: [maps]
+      summary: List maps
+      parameters:
+        - { in: query, name: limit, schema: { type: integer, default: 100 } }
+        - { in: query, name: offset, schema: { type: integer, default: 0 } }
+        - { in: query, name: tag, schema: { type: string } }
+      responses:
+        "200":
+          description: Map list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/GenericMap" }
+
+  /api/maps/{id}:
+    get:
+      tags: [maps]
+      summary: Get a map
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Map detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GenericMap" }
+        "404": { description: Not found }
+    patch:
+      tags: [maps]
+      summary: Update map metadata
+      description: GM or admin role required.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description: { type: string }
+                tags: { type: array, items: { type: string } }
+                map_type: { type: string }
+                grid_size: { type: string }
+      responses:
+        "200": { description: Updated }
+        "403": { description: GM or admin required }
+        "404": { description: Not found }
+
+  /api/maps/{id}/file:
+    get:
+      tags: [maps]
+      summary: Download map file
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Image file }
+        "404": { description: Not found }
+
+  /api/maps/{id}/thumbnail:
+    get:
+      tags: [maps]
+      summary: Map thumbnail
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: WebP thumbnail }
+        "404": { description: Not found }
+
+  /api/map-folders:
+    get:
+      tags: [maps]
+      summary: List map folder tags
+      responses:
+        "200":
+          description: Folder tag assignments
+    patch:
+      tags: [maps]
+      summary: Set tags on a map folder
+      description: GM or admin role required.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, tags]
+              properties:
+                path: { type: string }
+                tags: { type: array, items: { type: string } }
+      responses:
+        "200": { description: Updated }
+        "403": { description: GM or admin required }
+
+  # ── Tokens ────────────────────────────────────────────────────────────────
+
+  /api/tokens:
+    get:
+      tags: [tokens]
+      summary: List tokens
+      parameters:
+        - { in: query, name: limit, schema: { type: integer, default: 100 } }
+        - { in: query, name: offset, schema: { type: integer, default: 0 } }
+        - { in: query, name: tag, schema: { type: string } }
+      responses:
+        "200":
+          description: Token list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Token" }
+
+  /api/tokens/{id}:
+    get:
+      tags: [tokens]
+      summary: Get a token
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Token detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Token" }
+        "404": { description: Not found }
+    patch:
+      tags: [tokens]
+      summary: Update token metadata
+      description: GM or admin role required.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                description: { type: string }
+                tags: { type: array, items: { type: string } }
+                is_explicit: { type: boolean }
+      responses:
+        "200": { description: Updated }
+        "403": { description: GM or admin required }
+        "404": { description: Not found }
+
+  /api/tokens/{id}/file:
+    get:
+      tags: [tokens]
+      summary: Download token file
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Image file }
+
+  /api/tokens/{id}/thumbnail:
+    get:
+      tags: [tokens]
+      summary: Token thumbnail
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: WebP thumbnail }
+
+  /api/token-folders:
+    get:
+      tags: [tokens]
+      summary: List token folder tags
+      responses:
+        "200": { description: Folder tag assignments }
+    patch:
+      tags: [tokens]
+      summary: Set tags on a token folder
+      description: GM or admin role required.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path, tags]
+              properties:
+                path: { type: string }
+                tags: { type: array, items: { type: string } }
+      responses:
+        "200": { description: Updated }
+        "403": { description: GM or admin required }
+
+  # ── Favorites ─────────────────────────────────────────────────────────────
+
+  /api/favorites:
+    get:
+      tags: [favorites]
+      summary: List favorites
+      description: Returns current user's favorites with enriched detail.
+      responses:
+        "200": { description: Favorite list }
+    post:
+      tags: [favorites]
+      summary: Add a favorite
+      description: Idempotent — adding an already-favorited item returns 200.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item_type, item_id]
+              properties:
+                item_type: { type: string, enum: [book, map, token, system] }
+                item_id: { type: string, format: uuid }
+      responses:
+        "200": { description: Favorited }
+
+  /api/favorites/{type}/{id}:
+    delete:
+      tags: [favorites]
+      summary: Remove a favorite
+      description: Silent 204 if not found.
+      parameters:
+        - { in: path, name: type, required: true, schema: { type: string } }
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Removed }
+
+  # ── Bookmarks ─────────────────────────────────────────────────────────────
+
+  /api/bookmarks:
+    get:
+      tags: [bookmarks]
+      summary: List bookmarks for a book
+      description: Returns current user's bookmarks sorted by page number.
+      parameters:
+        - { in: query, name: book_id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Bookmark list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Bookmark" }
+    post:
+      tags: [bookmarks]
+      summary: Create a bookmark
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [book_id, page_number]
+              properties:
+                book_id: { type: string, format: uuid }
+                page_number: { type: integer }
+                label: { type: string }
+                notes: { type: string }
+                selected_text: { type: string, nullable: true, description: "null for page bookmarks" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Bookmark" }
+
+  /api/bookmarks/{id}:
+    patch:
+      tags: [bookmarks]
+      summary: Update a bookmark
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label: { type: string }
+                notes: { type: string }
+      responses:
+        "200": { description: Updated }
+        "404": { description: Not found }
+    delete:
+      tags: [bookmarks]
+      summary: Delete a bookmark
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+
+  # ── Search ────────────────────────────────────────────────────────────────
+
+  /api/search:
+    get:
+      tags: [search]
+      summary: Full-text search
+      description: FTS5 full-text search across indexed book pages. Also matches maps and tokens by filename (global searches only).
+      parameters:
+        - { in: query, name: q, required: true, schema: { type: string } }
+        - { in: query, name: book_id, schema: { type: string } }
+        - { in: query, name: system_id, schema: { type: string } }
+        - { in: query, name: limit, schema: { type: integer, default: 20 } }
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        title: { type: string }
+                        page_number: { type: integer }
+                        snippet: { type: string }
+                        category: { type: string }
+                  maps:
+                    type: array
+                    items: { $ref: "#/components/schemas/GenericMap" }
+                  tokens:
+                    type: array
+                    items: { $ref: "#/components/schemas/Token" }
+
+  # ── Campaigns ─────────────────────────────────────────────────────────────
+
+  /api/campaigns:
+    get:
+      tags: [campaigns]
+      summary: List campaigns
+      description: Returns campaigns owned by or with membership for the current user.
+      responses:
+        "200":
+          description: Campaign list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Campaign" }
+    post:
+      tags: [campaigns]
+      summary: Create a campaign
+      description: GM or admin role required when `is_gm_campaign` is true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                description: { type: string }
+                is_gm_campaign: { type: boolean, default: false }
+                gm_title: { type: string, default: "Game Master" }
+                system_id: { type: string, format: uuid, nullable: true }
+                parent_campaign_id: { type: string, format: uuid, nullable: true }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "403": { description: GM or admin required for GM campaigns }
+
+  /api/campaigns/{id}:
+    get:
+      tags: [campaigns]
+      summary: Get a campaign
+      description: Owner, accepted members, or admin.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Campaign with members and resources
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Campaign" }
+        "403": { description: Not a member }
+        "404": { description: Not found }
+    patch:
+      tags: [campaigns]
+      summary: Update a campaign
+      description: Owner or admin.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                description: { type: string }
+                gm_title: { type: string }
+                system_id: { type: string, nullable: true }
+                parent_campaign_id: { type: string, nullable: true }
+      responses:
+        "200": { description: Updated }
+        "403": { description: Not authorised }
+        "404": { description: Not found }
+    delete:
+      tags: [campaigns]
+      summary: Delete a campaign
+      description: Owner or admin. Deletes all related data.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "403": { description: Not authorised }
+        "404": { description: Not found }
+
+  /api/campaigns/{id}/invite:
+    post:
+      tags: [campaigns]
+      summary: Invite a player
+      description: Owner or admin. GM campaigns only.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: string, format: uuid }
+      responses:
+        "201": { description: Invited }
+        "400": { description: Not a GM campaign }
+        "403": { description: Not authorised }
+        "404": { description: User not found }
+        "409": { description: Already invited }
+
+  /api/campaigns/{id}/members/{user_id}:
+    patch:
+      tags: [campaigns]
+      summary: Accept/decline invitation or set character name
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: user_id, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: { type: string, enum: [accepted, declined] }
+                character_name: { type: string, nullable: true }
+      responses:
+        "200": { description: Updated }
+        "400": { description: Invalid status }
+        "403": { description: Not authorised }
+        "404": { description: Member not found }
+    delete:
+      tags: [campaigns]
+      summary: Remove a member
+      description: Owner, admin, or the member themselves.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: user_id, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Removed }
+        "403": { description: Not authorised }
+
+  /api/campaigns/{id}/eligible-members:
+    get:
+      tags: [campaigns]
+      summary: List users eligible to be invited
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Eligible users }
+        "403": { description: Not authorised }
+
+  /api/campaigns/resources/search:
+    get:
+      tags: [campaigns]
+      summary: Search resources for the resource picker
+      parameters:
+        - { in: query, name: q, schema: { type: string } }
+        - { in: query, name: resource_type, schema: { type: string, enum: [book, map, token] } }
+        - { in: query, name: limit, schema: { type: integer, default: 30 } }
+      responses:
+        "200": { description: Resource matches }
+
+  /api/campaigns/{id}/resources:
+    get:
+      tags: [campaigns]
+      summary: List campaign resources
+      description: Non-owners only see resources where `shared` is true.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Resource list }
+        "403": { description: Not a member }
+    post:
+      tags: [campaigns]
+      summary: Link a resource to a campaign
+      description: Owner or admin.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resource_type, resource_id]
+              properties:
+                resource_type: { type: string, enum: [book, map, token] }
+                resource_id: { type: string, format: uuid }
+                shared: { type: boolean, default: false }
+      responses:
+        "201": { description: Linked }
+        "400": { description: Invalid resource type }
+        "403": { description: Not authorised }
+        "409": { description: Already linked }
+
+  /api/campaigns/{id}/resources/{res_id}:
+    patch:
+      tags: [campaigns]
+      summary: Update resource sharing
+      description: Owner or admin.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: res_id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shared]
+              properties:
+                shared: { type: boolean }
+      responses:
+        "200": { description: Updated }
+        "403": { description: Not authorised }
+        "404": { description: Not found }
+    delete:
+      tags: [campaigns]
+      summary: Unlink a resource
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: res_id, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Unlinked }
+        "403": { description: Not authorised }
+
+  /api/campaigns/{id}/sessions:
+    get:
+      tags: [campaigns]
+      summary: List session notes
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Session list }
+        "403": { description: Not a member }
+    post:
+      tags: [campaigns]
+      summary: Create a session note
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [session_date]
+              properties:
+                session_date: { type: string, format: date, example: "2026-01-15" }
+                title: { type: string }
+      responses:
+        "201": { description: Created }
+        "400": { description: Invalid date format }
+        "403": { description: Not a member }
+
+  /api/campaigns/{id}/sessions/{sid}:
+    get:
+      tags: [campaigns]
+      summary: Get a session with all notes
+      description: GM sees `internal_content`; members see only `external_content`.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: sid, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Session detail
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SessionNote" }
+        "403": { description: Not a member }
+        "404": { description: Not found }
+    patch:
+      tags: [campaigns]
+      summary: Update session title
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: sid, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title: { type: string }
+      responses:
+        "200": { description: Updated }
+        "403": { description: Not a member }
+        "404": { description: Not found }
+    delete:
+      tags: [campaigns]
+      summary: Delete a session note
+      description: Owner or admin.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: sid, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "403": { description: Not authorised }
+
+  /api/campaigns/{id}/sessions/{sid}/notes/player:
+    put:
+      tags: [campaigns]
+      summary: Save own player note
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: sid, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+      responses:
+        "200": { description: Saved }
+        "403": { description: Not a member }
+        "404": { description: Session not found }
+
+  /api/campaigns/{id}/sessions/{sid}/notes/gm:
+    put:
+      tags: [campaigns]
+      summary: Save GM notes
+      description: Owner or admin.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: sid, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                internal_content: { type: string }
+                external_content: { type: string }
+      responses:
+        "200": { description: Saved }
+        "403": { description: Not authorised }
+        "404": { description: Session not found }
+
+  /api/campaigns/{id}/schedule:
+    get:
+      tags: [campaigns]
+      summary: Get campaign schedule
+      description: Returns schedule definition and next 10 session dates.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Schedule
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  definition: { type: object }
+                  next_sessions:
+                    type: array
+                    items: { type: string, format: date }
+    put:
+      tags: [campaigns]
+      summary: Set or update campaign schedule
+      description: Owner or admin. GM campaigns only.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [frequency, days]
+              properties:
+                frequency: { type: string, enum: [weekly, biweekly, monthly, custom] }
+                days:
+                  type: array
+                  items: { type: integer, minimum: 0, maximum: 6 }
+                  description: "Weekday indices: 0=Monday … 6=Sunday"
+                time_utc: { type: string, example: "18:00", nullable: true }
+                biweekly_reference: { type: string, format: date, nullable: true }
+                monthly_week: { type: integer, nullable: true, description: "1–4 or -1 for last" }
+                custom_dates:
+                  type: array
+                  items: { type: string, format: date }
+                  nullable: true
+      responses:
+        "200": { description: Schedule set }
+        "403": { description: Not authorised }
+    delete:
+      tags: [campaigns]
+      summary: Remove campaign schedule
+      description: Owner or admin.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Removed }
+        "403": { description: Not authorised }
+
+  /api/campaigns/{id}/availability:
+    get:
+      tags: [campaigns]
+      summary: Availability chart
+      description: Returns availability for the next 10 scheduled sessions.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Availability data }
+        "403": { description: Not a member }
+
+  /api/campaigns/{id}/availability/{date}:
+    put:
+      tags: [campaigns]
+      summary: Set own availability
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: date, required: true, schema: { type: string, format: date } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [available, tentative, unavailable] }
+      responses:
+        "200": { description: Saved }
+        "403": { description: Not a member }
+
+  /api/campaigns/{id}/availability/{date}/cancel:
+    put:
+      tags: [campaigns]
+      summary: Toggle session cancellation
+      description: Owner or admin. Marks or unmarks the entire date as cancelled.
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string } }
+        - { in: path, name: date, required: true, schema: { type: string, format: date } }
+      responses:
+        "200": { description: Toggled }
+        "403": { description: Not authorised }
+
+  # ── Settings ──────────────────────────────────────────────────────────────
+
+  /api/settings:
+    get:
+      tags: [settings]
+      summary: Get app settings
+      description: Admin only.
+      responses:
+        "200": { description: Settings }
+        "403": { description: Admin required }
+    patch:
+      tags: [settings]
+      summary: Update app settings
+      description: Admin only.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rescan_schedule_enabled: { type: boolean }
+                rescan_schedule_interval: { type: string, enum: [hourly, daily, weekly] }
+                rescan_schedule_hour: { type: integer, minimum: 0, maximum: 23 }
+                rescan_schedule_minute: { type: integer, minimum: 0, maximum: 59 }
+                rescan_schedule_weekday: { type: integer, minimum: 0, maximum: 6 }
+                hide_maps: { type: boolean }
+                hide_tokens: { type: boolean }
+                hide_campaigns: { type: boolean }
+                show_stat_systems: { type: boolean }
+                show_stat_books: { type: boolean }
+                show_stat_pages: { type: boolean }
+                show_stat_maps: { type: boolean }
+                show_stat_tokens: { type: boolean }
+                show_stat_size: { type: boolean }
+                show_stat_version: { type: boolean }
+      responses:
+        "200": { description: Updated settings }
+        "400": { description: Invalid interval }
+        "403": { description: Admin required }
+
+  /api/settings/ui:
+    get:
+      tags: [settings]
+      summary: Get UI visibility settings
+      description: Available to any authenticated user. Returns visibility flags for the frontend.
+      responses:
+        "200": { description: UI settings }
+
+  /api/settings/api-key/generate:
+    post:
+      tags: [settings]
+      summary: Generate a stats API key
+      description: Admin only. The key can be used in the `X-API-Key` header to access `/api/stats`.
+      responses:
+        "200":
+          description: Generated key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stats_api_key: { type: string }
+        "403": { description: Admin required }
+
+  /api/settings/api-key:
+    delete:
+      tags: [settings]
+      summary: Revoke the stats API key
+      description: Admin only.
+      responses:
+        "200": { description: Key revoked }
+        "403": { description: Admin required }
+
+  # ── Maintenance ───────────────────────────────────────────────────────────
+
+  /api/maintenance/cleanup-missing:
+    post:
+      tags: [maintenance]
+      summary: Remove DB records for missing files
+      description: Admin only. Checks every book, map, and token filepath against disk and removes stale records.
+      responses:
+        "200":
+          description: Cleanup results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  removed:
+                    type: object
+                    properties:
+                      books: { type: integer }
+                      maps: { type: integer }
+                      tokens: { type: integer }
+        "403": { description: Admin required }
+
+tags:
+  - name: auth
+    description: Authentication — first-run setup, login, and token validation
+  - name: users
+    description: User management (admin only)
+  - name: library
+    description: Library-wide statistics and rescanning
+  - name: systems
+    description: Game system catalog
+  - name: books
+    description: Book catalog — browse, read, and download
+  - name: maps
+    description: Map gallery
+  - name: tokens
+    description: Token browser
+  - name: favorites
+    description: Per-user favorites
+  - name: bookmarks
+    description: Per-user bookmarks within books
+  - name: search
+    description: Full-text search
+  - name: campaigns
+    description: Campaign management — sessions, members, resources, and scheduling
+  - name: settings
+    description: Application settings (admin only)
+  - name: maintenance
+    description: Admin housekeeping tasks

@@ -1,0 +1,52 @@
+services:
+  grimoire:
+    image: hunterreadca/grimoire:latest
+    container_name: grimoire
+    restart: unless-stopped
+    ports:
+      - "9481:9481"   # Change the left side to expose on a different host port
+    environment:
+      # Path inside the container — do not change these unless you also change the volume targets below
+      - LIBRARY_PATH=/library
+      - DATA_PATH=/data
+
+      # Number of uvicorn worker processes. 2–4 is typical; more workers = more memory use.
+      - WORKERS=2
+
+      # Required — used to sign JWT tokens. Must be a long random string.
+      # Generate one with: openssl rand -hex 32
+      - SECRET_KEY=change-me
+
+      # Optional — Valkey/Redis URL for page-image caching.
+      # Remove this line (and the valkey service, network, and volume below) if you don't want caching.
+      - VALKEY_URL=redis://valkey:6379/0
+
+    volumes:
+      # Left side: absolute path on the host to your TTRPG library folder (read-only)
+      - /path/to/your/library:/library:ro
+      # Left side: absolute path on the host where Grimoire stores its database, thumbnails, and cache
+      - /path/to/grimoire/data:/data
+
+    # Remove if not using Valkey
+    depends_on:
+      - valkey
+    networks:
+      - grimoire
+
+  # Optional — page-image cache. Remove this service (and the network/volume below) if not needed.
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: grimoire-valkey
+    restart: unless-stopped
+    volumes:
+      - valkey-data:/data
+    networks:
+      - grimoire
+
+# Remove if not using Valkey
+volumes:
+  valkey-data:
+
+# Remove if not using Valkey
+networks:
+  grimoire:

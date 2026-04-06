@@ -1,4 +1,5 @@
 """Book page rendering, TOC, and text-extraction endpoints."""
+import hashlib
 import io
 import os
 
@@ -80,13 +81,10 @@ def serve_book_page(book_id: str, page_num: int, width: int = Query(1200, le=300
         except Exception as e:
             logger.warning(f"Valkey get error: {e}")
 
-    # book_id comes from the DB lookup above (not raw user input), but sanitise
-    # before using in a filename to prevent any path traversal via crafted IDs.
-    safe_id = os.path.basename(book_id)
-    cache_path = os.path.join(PAGE_CACHE_DIR, f"{safe_id}_{page_num}_{width}.webp")
-    resolved = os.path.realpath(cache_path)
-    if not resolved.startswith(os.path.realpath(PAGE_CACHE_DIR) + os.sep):
-        raise HTTPException(400, "Invalid book id")
+    # Derive cache filename from the DB-sourced filepath (never user input)
+    # so no tainted data touches the filesystem path.
+    file_hash = hashlib.sha1(filepath.encode()).hexdigest()[:16]
+    cache_path = os.path.join(PAGE_CACHE_DIR, f"{file_hash}_{page_num}_{width}.webp")
     if os.path.exists(cache_path):
         if _valkey is not None:
             try:

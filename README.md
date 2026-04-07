@@ -15,7 +15,7 @@ A Docker-based web application for managing your tabletop RPG PDF collection. Br
 
 ## Features
 
-- **Library Browser** — Organises your collection by game system with automatic folder detection
+- **Library Browser** — Organizes your collection by game system with automatic folder detection
 - **Full-Text Search** — Every page of every PDF is indexed with SQLite FTS5 for instant search; also finds maps and tokens by filename, folder, or tag
 - **Page-by-Page Viewer** — PDFs rendered as images for fast mobile viewing with pinch-to-zoom, swipe navigation, and spread mode
 - **Map Gallery** — Browse battlemaps by directory structure with tag filtering, grid metadata, and full-res download
@@ -53,7 +53,9 @@ A Docker-based web application for managing your tabletop RPG PDF collection. Br
 
 ## Quick Start
 
-### 1. Organise your library
+> New to Docker? See the [Docker Installation Guide](docs/docker-install.md) for a step-by-step walkthrough for Windows, macOS, and Linux.
+
+### 1. Organize your library
 
 Create a `library/` folder with this structure:
 
@@ -174,7 +176,7 @@ Each top-level folder under `books/` becomes a **game system**. Subfolders are a
 
 Folder name matching is **case-insensitive**, and hyphens, underscores, and spaces are interchangeable — `Character-Sheets`, `character_sheets`, and `Character Sheets` all map to the same category.
 
-| Category | Recognised folder names | What goes here |
+| Category | Recognized folder names | What goes here |
 |---|---|---|
 | Core Rulebooks | `core`, `rulebooks`, `rules` | Player handbooks, GM guides, base rules |
 | Starter Set | `starter-set`, `starter kit`, `beginner box`, `boxed set`, `essentials` | Starter/beginner boxes, introductory sets |
@@ -186,7 +188,7 @@ Folder name matching is **case-insensitive**, and hyphens, underscores, and spac
 
 > Files placed directly in a system folder (not in a subfolder) default to the **core** category.
 >
-> Any subfolder name that doesn't match the recognised keywords becomes its own category, slugified from the folder name. For example, a folder named `Bestiary` becomes the `bestiary` category.
+> Any subfolder name that doesn't match the recognized keywords becomes its own category, slugified from the folder name. For example, a folder named `Bestiary` becomes the `bestiary` category.
 >
 > After adding new files, use **Rescan** in the sidebar (or Settings → Maintenance) to pick up the changes.
 
@@ -203,7 +205,7 @@ books/
 
 Users with explicit content disabled will not see this system or its books.
 
-### Maps — organise by creator or collection
+### Maps — organize by creator or collection
 
 ```
 maps/
@@ -213,7 +215,7 @@ maps/
 
 The folder name is shown as a group header in the map gallery.
 
-### Tokens — organise by type
+### Tokens — organize by type
 
 ```
 tokens/
@@ -397,8 +399,6 @@ The live API is self-documented via OpenAPI. With the server running:
 | `http://localhost:9481/api/docs` | Swagger UI — interactive docs |
 | `http://localhost:9481/api/redoc` | ReDoc — readable reference |
 | `http://localhost:9481/api/openapi.json` | Raw OpenAPI schema |
-
-A static OpenAPI spec is also available at [docs/api.yml](docs/api.yml).
 
 ---
 

@@ -357,7 +357,7 @@ All errors follow FastAPI's standard format:
 
 ## Library directory structure
 
-The scanner expects files organised as:
+The scanner expects files organized as:
 
 ```
 /library/

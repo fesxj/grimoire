@@ -20,8 +20,12 @@ logger = logging.getLogger("grimoire.indexer")
 _FITZ_TIMEOUT = 300  # seconds
 
 
-def _fitz_open_with_timeout(filepath: str, timeout: int = _FITZ_TIMEOUT):
-    """Open a PDF with fitz, raising TimeoutError if it hangs beyond `timeout` seconds."""
+def _fitz_open_with_timeout(filepath: str, timeout: int = _FITZ_TIMEOUT, should_stop=None):
+    """Open a PDF with fitz, raising TimeoutError if it hangs beyond `timeout` seconds.
+
+    If `should_stop` callable is provided, the wait is interrupted early when it
+    returns True, raising TimeoutError so the caller can exit cleanly.
+    """
     result = [None]
     exc = [None]
 
@@ -33,7 +37,14 @@ def _fitz_open_with_timeout(filepath: str, timeout: int = _FITZ_TIMEOUT):
 
     t = threading.Thread(target=_open, daemon=True)
     t.start()
-    t.join(timeout)
+    deadline = timeout
+    poll_interval = 0.5  # check stop flag every 500ms
+    elapsed = 0.0
+    while t.is_alive() and elapsed < deadline:
+        t.join(poll_interval)
+        elapsed += poll_interval
+        if should_stop and should_stop():
+            raise TimeoutError(f"fitz.open() aborted by stop request for {filepath}")
     if t.is_alive():
         raise TimeoutError(f"fitz.open() timed out after {timeout}s for {filepath}")
     if exc[0] is not None:
@@ -85,12 +96,12 @@ def guess_category(filepath: str) -> str:
     return "core"
 
 
-def generate_thumbnail(filepath: str, output_path: str, size: tuple = (300, 400)) -> bool:
+def generate_thumbnail(filepath: str, output_path: str, size: tuple = (300, 400), should_stop=None) -> bool:
     """Generate a thumbnail from the first page of a PDF or from an image."""
     try:
         ext = Path(filepath).suffix.lower()
         if ext == ".pdf":
-            doc = _fitz_open_with_timeout(filepath)
+            doc = _fitz_open_with_timeout(filepath, should_stop=should_stop)
             if len(doc) == 0:
                 return False
             page = doc[0]
@@ -114,11 +125,11 @@ def generate_thumbnail(filepath: str, output_path: str, size: tuple = (300, 400)
         return False
 
 
-def extract_text_from_pdf(filepath: str) -> list[dict]:
+def extract_text_from_pdf(filepath: str, should_stop=None) -> list[dict]:
     """Extract text from all pages of a PDF. Returns list of {page, content}."""
     pages = []
     try:
-        doc = _fitz_open_with_timeout(filepath)
+        doc = _fitz_open_with_timeout(filepath, should_stop=should_stop)
         for i, page in enumerate(doc):
             page_text = page.get_text().strip()
             if page_text:
@@ -140,11 +151,13 @@ def _count_eligible_files(directory: Path, extensions: set) -> int:
     return count
 
 
-def scan_library(library_path: str, data_path: str, session: Session, on_progress=None):
+def scan_library(library_path: str, data_path: str, session: Session, on_progress=None, should_stop=None):
     """Scan the library directory and register all files in the database.
 
     on_progress(scanned_books, total_books, scanned_maps, total_maps, scanned_tokens, total_tokens)
     is called after each file is processed if provided.
+
+    should_stop() is an optional callable that returns True when the scan should abort early.
     """
     library = Path(library_path)
     books_dir = library / "books"
@@ -214,13 +227,18 @@ def scan_library(library_path: str, data_path: str, session: Session, on_progres
                             scanned_tokens,
                             total_tokens,
                         )
+                    if should_stop and should_stop():
+                        logger.info("scan_library: stop requested during books scan.")
+                        return stats
 
                     relative_path = os.path.relpath(filepath, library_path)
 
                     existing = session.query(Book).filter_by(filepath=filepath).first()
                     if existing:
+                        logger.debug(f"File scan: already registered, skipping: {filename}")
                         continue
 
+                    logger.debug(f"File scan: new book found: {filename}")
                     category = guess_category(relative_path)
                     title = Path(filename).stem.replace("_", " ").replace("-", " ").strip()
 
@@ -246,12 +264,12 @@ def scan_library(library_path: str, data_path: str, session: Session, on_progres
                         "books",
                         f"{slugify(title)}_{hashlib.md5(filepath.encode()).hexdigest()[:8]}.webp",
                     )
-                    if generate_thumbnail(filepath, thumb_path):
+                    if generate_thumbnail(filepath, thumb_path, should_stop=should_stop):
                         book.has_thumbnail = True
 
                     if ext == ".pdf":
                         try:
-                            doc = _fitz_open_with_timeout(filepath)
+                            doc = _fitz_open_with_timeout(filepath, should_stop=should_stop)
                             book.page_count = len(doc)
                             doc.close()
                         except Exception as e:
@@ -291,13 +309,18 @@ def scan_library(library_path: str, data_path: str, session: Session, on_progres
                         scanned_tokens,
                         total_tokens,
                     )
+                if should_stop and should_stop():
+                    logger.info("scan_library: stop requested during maps scan.")
+                    return stats
 
                 relative_path = os.path.relpath(filepath, library_path)
 
                 existing = session.query(GenericMap).filter_by(filepath=filepath).first()
                 if existing:
+                    logger.debug(f"File scan: already registered, skipping: {filename}")
                     continue
 
+                logger.debug(f"File scan: new map found: {filename}")
                 title = Path(filename).stem.replace("_", " ").replace("-", " ").strip()
 
                 try:
@@ -318,7 +341,7 @@ def scan_library(library_path: str, data_path: str, session: Session, on_progres
                     "maps",
                     f"{slugify(title)}_{hashlib.md5(filepath.encode()).hexdigest()[:8]}.webp",
                 )
-                if generate_thumbnail(filepath, thumb_path):
+                if generate_thumbnail(filepath, thumb_path, should_stop=should_stop):
                     gmap.has_thumbnail = True
 
                 session.add(gmap)
@@ -353,13 +376,18 @@ def scan_library(library_path: str, data_path: str, session: Session, on_progres
                         scanned_tokens,
                         total_tokens,
                     )
+                if should_stop and should_stop():
+                    logger.info("scan_library: stop requested during tokens scan.")
+                    return stats
 
                 relative_path = os.path.relpath(filepath, library_path)
 
                 existing = session.query(Token).filter_by(filepath=filepath).first()
                 if existing:
+                    logger.debug(f"File scan: already registered, skipping: {filename}")
                     continue
 
+                logger.debug(f"File scan: new token found: {filename}")
                 title = Path(filename).stem.replace("_", " ").replace("-", " ").strip()
 
                 try:
@@ -380,7 +408,7 @@ def scan_library(library_path: str, data_path: str, session: Session, on_progres
                     "tokens",
                     f"{slugify(title)}_{hashlib.md5(filepath.encode()).hexdigest()[:8]}.webp",
                 )
-                if generate_thumbnail(filepath, thumb_path, size=(200, 200)):
+                if generate_thumbnail(filepath, thumb_path, size=(200, 200), should_stop=should_stop):
                     token.has_thumbnail = True
 
                 session.add(token)
@@ -499,12 +527,12 @@ def _apply_tags_from_library(library_path: str, session: Session) -> None:
     session.commit()
 
 
-def index_book_text(book: Book, data_path: str, session: Session):
+def index_book_text(book: Book, data_path: str, session: Session, should_stop=None):
     """Extract and index text from a PDF for full-text search."""
     if book.indexed or book.index_failed or book.mime_type != "application/pdf":
         return False
 
-    pages = extract_text_from_pdf(book.filepath)
+    pages = extract_text_from_pdf(book.filepath, should_stop=should_stop)
     if not pages:
         book.index_error = "No text extracted"
         book.index_failed = True
@@ -523,5 +551,5 @@ def index_book_text(book: Book, data_path: str, session: Session):
     book.indexed = True
     book.index_error = ""
     session.commit()
-    logger.info(f"Indexed {len(pages)} pages for: {book.title}")
+    logger.info(f"Indexed {len(pages)} pages for: {book.filename} ('{book.title}')")
     return True

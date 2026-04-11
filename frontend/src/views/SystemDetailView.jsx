@@ -60,6 +60,10 @@ export default function SystemDetailView() {
     categories[cat].push(book)
   })
 
+  const allCatKeys = Object.keys(categories)
+  const collapseAll = () => setCollapsedCats(new Set(allCatKeys))
+  const expandAll   = () => setCollapsedCats(new Set())
+
   return (
     <div className="fade-in" style={{ padding: '32px 40px', maxWidth: 1200, width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
       {/* Header */}
@@ -129,21 +133,29 @@ export default function SystemDetailView() {
         />
       )}
 
-      {/* Search bar */}
-      <div style={{ position: 'relative', marginBottom: 28 }}>
-        <LuSearch size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={handleSearchInput}
-          placeholder={`Search within ${system.name}…`}
-          style={{ width: '100%', fontSize: 15, padding: '10px 40px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-card)', boxSizing: 'border-box' }}
-        />
-        {searching && <div style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)' }}><Spinner size={16} /></div>}
-        {searchQuery && !searching && (
-          <button onClick={clearSearch} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex' }}>
-            <LuX size={15} />
-          </button>
+      {/* Toolbar: search + collapse/expand */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 28, flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: '1 1 200px' }}>
+          <LuSearch size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={handleSearchInput}
+            placeholder={`Search within ${system.name}…`}
+            style={{ width: '100%', fontSize: 13, padding: '6px 28px 6px 30px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-card)', boxSizing: 'border-box' }}
+          />
+          {searching && <div style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)' }}><Spinner size={14} /></div>}
+          {searchQuery && !searching && (
+            <button onClick={clearSearch} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: 0 }}>
+              <LuX size={12} />
+            </button>
+          )}
+        </div>
+        {!searchResults && (
+          <>
+            <button onClick={collapseAll} style={toolBtnStyle}>Collapse All</button>
+            <button onClick={expandAll} style={toolBtnStyle}>Expand All</button>
+          </>
         )}
       </div>
 
@@ -237,7 +249,7 @@ export default function SystemDetailView() {
           )
         })}
 
-      {!searchResults && Object.keys(categories).length === 0 && (
+      {!searchResults && allCatKeys.length === 0 && (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}>
           <LuFolderOpen size={48} style={{ marginBottom: 16, opacity: 0.4 }} />
           <p>No books found. Add PDFs to this system's directory and rescan.</p>
@@ -245,4 +257,11 @@ export default function SystemDetailView() {
       )}
     </div>
   )
+}
+
+const toolBtnStyle = {
+  padding: '6px 12px', borderRadius: 6, fontSize: 13,
+  background: 'var(--bg-card)', color: 'var(--text-dim)',
+  border: '1px solid var(--border)', cursor: 'pointer',
+  flexShrink: 0,
 }

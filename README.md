@@ -119,10 +119,7 @@ services:
       SECRET_KEY: "generate-with-openssl-rand-hex-32"
     volumes:
       - /path/to/your/library:/library:ro
-      - grimoire_data:/data
-
-volumes:
-  grimoire_data:
+      - /path/to/grimoire/data:/data
 ```
 
 ### 5. With Valkey page cache (recommended for large libraries)
@@ -138,7 +135,7 @@ services:
       VALKEY_URL: "redis://valkey:6379/0"
     volumes:
       - /path/to/your/library:/library:ro
-      - grimoire_data:/data
+      - /path/to/grimoire/data:/data
     depends_on:
       - valkey
 
@@ -148,7 +145,6 @@ services:
       - valkey_data:/data
 
 volumes:
-  grimoire_data:
   valkey_data:
 ```
 

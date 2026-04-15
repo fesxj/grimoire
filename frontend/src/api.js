@@ -77,6 +77,12 @@ export const campaigns = {
   cancelDate: (id, date) => api.put(`/campaigns/${id}/availability/${date}/cancel`),
 }
 
+export const opds = {
+  getStatus:     () => api.get('/users/me/opds'),
+  generateToken: () => api.post('/users/me/opds/generate'),
+  revokeToken:   () => api.delete('/users/me/opds'),
+}
+
 export const settings = {
   get:       ()     => api.get('/settings'),
   getUi:     ()     => api.get('/settings/ui'),

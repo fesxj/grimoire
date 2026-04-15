@@ -26,6 +26,7 @@ A Docker-based web application for managing your tabletop RPG PDF collection. Br
 - **Multiple Publishers** — Game systems support multiple publishers, each with an optional URL
 - **Campaigns** — Track GM-run and personal campaigns; session notes, player notes, linked resources, and scheduling
 - **Display Names & Character Names** — Users can set a display name; campaign members can set a character name per campaign
+- **OPDS Catalog** — Each user can generate a personal OPDS feed URL to connect e-reader apps directly to their library
 - **Docker Ready** — One command to run, mount your library directory, done
 - **Responsive** — Works on desktop, tablet, and phone with mobile navigation
 
@@ -306,7 +307,9 @@ Tags are applied (or updated) every time the library is rescanned. Tags set via 
 | `LIBRARY_PATH` | `/library` | Path to your mounted library directory |
 | `DATA_PATH` | `/data` | Path for the database, thumbnails, and search cache |
 | `WORKERS` | `2` | Number of uvicorn worker processes |
+| `BASE_URL` | `http://localhost:9481` | Public base URL of this instance. Set this to the URL you use to access Grimoire (e.g. `https://grimoire.example.com`) when running behind a reverse proxy — used to build absolute links in OPDS feeds and other places that need a fully-qualified URL. |
 | `VALKEY_URL` | — | Optional Redis-compatible cache URL for rendered page images (e.g. `redis://valkey:6379/0`) |
+| `OPDS_ENABLED` | `false` | Set to `true` to enable the OPDS catalog. See [OPDS](#opds) below. |
 | `LOG_LEVEL` | `info` | Optional Console/Docker log verbosity: `debug`, `info`, `warning`, `error`, or `critical`. The in-app Logs tab (Settings → Logs) always captures `debug`-level entries regardless of this setting. |
 
 ### Volumes
@@ -431,6 +434,44 @@ GM campaigns support recurring session schedules:
 - **Custom** — explicit list of dates
 
 Session note stubs are auto-created the day before each scheduled session. Players can mark their availability for upcoming dates, and the GM can cancel individual dates.
+
+---
+
+## OPDS
+
+Grimoire supports the [OPDS 1.2](https://specs.opds.io/opds-1.2) catalog format, allowing e-reader apps (Panels, Chunky, Kybook, KOReader, etc.) to browse and download books directly from your library.
+
+### Enabling OPDS
+
+Set `OPDS_ENABLED=true` and `BASE_URL` to your instance's public URL in your compose file:
+
+```yaml
+environment:
+  OPDS_ENABLED: "true"
+  BASE_URL: "https://grimoire.example.com"
+```
+
+### Personal feed URLs
+
+OPDS access is per-user. Each user generates their own opaque feed URL in **Settings → Account → OPDS Feed**. The URL contains a long random token — no username or password is needed by the OPDS client.
+
+- **Enable** — generates a unique feed URL
+- **Copy** — copies the URL to the clipboard
+- **Regenerate** — issues a new token; the old URL stops working immediately
+- **Disable** — revokes the token; the feed URL stops working immediately
+
+### Feed URL structure
+
+```
+https://grimoire.example.com/opds/{token}          ← navigation root
+https://grimoire.example.com/opds/{token}/all       ← all books
+https://grimoire.example.com/opds/{token}/entry/{id}  ← single book
+https://grimoire.example.com/opds/{token}/download/{id}  ← file download
+```
+
+### Content filtering
+
+The OPDS feed respects each user's explicit-content preference. Users with explicit content disabled will not see explicit books in their feed and cannot download them via OPDS.
 
 ---
 

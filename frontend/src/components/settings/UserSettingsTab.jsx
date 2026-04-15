@@ -1,4 +1,4 @@
-import { DisplayNameSection, ExplicitContentSection, ChangePasswordSection, DeleteAccountSection } from './UserAccountSections'
+import { DisplayNameSection, ExplicitContentSection, ChangePasswordSection, DeleteAccountSection, OPDSSection } from './UserAccountSections'
 import { ReaderSection, LibrarySection } from './UserPreferenceSections'
 
 function SectionDivider() {
@@ -15,6 +15,7 @@ export default function UserSettingsTab({ user, onLogout }) {
       <LibrarySection />
       <SectionDivider />
       <ExplicitContentSection />
+      <OPDSSection />
       <SectionDivider />
       <ChangePasswordSection />
       <SectionDivider />

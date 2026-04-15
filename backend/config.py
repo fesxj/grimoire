@@ -8,6 +8,10 @@ from typing import Optional
 from .models import init_db
 
 VERSION = os.environ.get("APP_VERSION", "1.0.0")
+OPDS_ENABLED = os.environ.get("OPDS_ENABLED", "false").lower() == "true"
+# Public base URL of this instance (e.g. "https://grimoire.example.com").
+# Used to build absolute links in OPDS feeds and anywhere a fully-qualified URL is needed.
+BASE_URL = os.environ.get("BASE_URL", "http://localhost:9481").rstrip("/")
 
 LIBRARY_PATH = os.environ.get("LIBRARY_PATH", "./library")
 DATA_PATH = os.environ.get("DATA_PATH", "./data")

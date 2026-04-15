@@ -21,6 +21,13 @@ services:
       # Remove this line (and the valkey service, network, and volume below) if you don't want caching.
       - VALKEY_URL=redis://valkey:6379/0
 
+      # Optional — public base URL of this instance, used to build absolute links (e.g. OPDS feed URLs).
+      # Set this to the URL you use to access Grimoire, especially when running behind a reverse proxy.
+      # - BASE_URL=https://grimoire.example.com
+
+      # Optional — enable OPDS catalog access. Each user can generate a personal feed URL in Account Settings.
+      # - OPDS_ENABLED=true
+
     volumes:
       # Left side: absolute path on the host to your TTRPG library folder (read-only)
       - /path/to/your/library:/library:ro

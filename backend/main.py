@@ -8,7 +8,7 @@ from fastapi import FastAPI, APIRouter, Depends, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 
-from .config import DATA_PATH, LIBRARY_PATH, SessionLocal, VERSION, logger
+from .config import DATA_PATH, LIBRARY_PATH, SessionLocal, VERSION, logger, OPDS_ENABLED
 from .seed_users import seed_users
 from .routers import maps as maps_router
 from .routers import tokens as tokens_router
@@ -27,6 +27,7 @@ from .routers import campaigns as campaigns_router
 from .routers import logs as logs_router
 from .routers import downloads as downloads_router
 from .routers.library import run_rescan_sync
+from .routers import opds as opds_router
 from . import scheduler
 from . import session_creator
 
@@ -131,6 +132,8 @@ if os.path.isdir(_assets_dir):
 
 app.include_router(auth_router.public_router)
 app.include_router(library_router.public_router)
+if OPDS_ENABLED:
+    app.include_router(opds_router.router)
 
 api = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
 api.include_router(auth_router.router)

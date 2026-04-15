@@ -1,8 +1,10 @@
 """Self-service user endpoints (preferences, password, account deletion)."""
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import text
 
-from ...config import SessionLocal
+from ...config import SessionLocal, OPDS_ENABLED, BASE_URL
 from ...models import User
 from ...auth import get_current_user, CurrentUser, hash_password, verify_password
 from ._schemas import PasswordChange, PreferencesUpdate
@@ -59,5 +61,54 @@ def delete_own_account(current_user: CurrentUser = Depends(get_current_user)):
         db.execute(text("DELETE FROM favorites WHERE user_id = :uid"), {"uid": user.id})
         db.delete(user)
         db.commit()
+    finally:
+        db.close()
+
+
+def get_opds_status(current_user: CurrentUser = Depends(get_current_user)):
+    """Return OPDS availability and the user's current feed URL (if enabled)."""
+    if not OPDS_ENABLED:
+        return {"opds_enabled": False, "feed_url": None}
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(id=current_user.id).first()
+        if not user:
+            raise HTTPException(404, "User not found")
+        feed_url = f"{BASE_URL}/opds/{user.opds_token}" if user.opds_token else None
+        return {"opds_enabled": True, "has_token": bool(user.opds_token), "feed_url": feed_url}
+    finally:
+        db.close()
+
+
+def generate_opds_token(current_user: CurrentUser = Depends(get_current_user)):
+    """Generate (or regenerate) the user's OPDS token. Old token is immediately revoked."""
+    if not OPDS_ENABLED:
+        raise HTTPException(403, "OPDS is not enabled on this server")
+    token = secrets.token_urlsafe(48)
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(id=current_user.id).first()
+        if not user:
+            raise HTTPException(404, "User not found")
+        user.opds_token = token
+        db.commit()
+        feed_url = f"{BASE_URL}/opds/{token}"
+        return {"opds_enabled": True, "has_token": True, "feed_url": feed_url}
+    finally:
+        db.close()
+
+
+def revoke_opds_token(current_user: CurrentUser = Depends(get_current_user)):
+    """Revoke the user's OPDS token. The feed URL immediately stops working."""
+    if not OPDS_ENABLED:
+        raise HTTPException(403, "OPDS is not enabled on this server")
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(id=current_user.id).first()
+        if not user:
+            raise HTTPException(404, "User not found")
+        user.opds_token = None
+        db.commit()
+        return {"opds_enabled": True, "has_token": False, "feed_url": None}
     finally:
         db.close()

@@ -2,7 +2,14 @@
 from fastapi import APIRouter
 
 from .core import list_users, create_user, update_user, delete_user
-from .me import update_own_preferences, change_own_password, delete_own_account
+from .me import (
+    update_own_preferences,
+    change_own_password,
+    delete_own_account,
+    get_opds_status,
+    generate_opds_token,
+    revoke_opds_token,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -19,6 +26,17 @@ router.add_api_route(
 )
 router.add_api_route(
     "/me", delete_own_account, methods=["DELETE"], summary="Delete own account", status_code=204
+)
+
+# --- OPDS (self-service) ---
+router.add_api_route(
+    "/me/opds", get_opds_status, methods=["GET"], summary="Get OPDS feed status"
+)
+router.add_api_route(
+    "/me/opds/generate", generate_opds_token, methods=["POST"], summary="Generate/regenerate OPDS token"
+)
+router.add_api_route(
+    "/me/opds", revoke_opds_token, methods=["DELETE"], summary="Revoke OPDS token", status_code=200
 )
 
 # --- Admin single-user operations ---

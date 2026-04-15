@@ -157,6 +157,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(20), default="player")
     allow_explicit = Column(Boolean, default=True)
+    opds_token = Column(String(64), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=_utcnow)
 
 
@@ -383,6 +384,7 @@ def init_db(db_path: str):
             "ALTER TABLE books ADD COLUMN is_missing BOOLEAN DEFAULT 0",
             "ALTER TABLE generic_maps ADD COLUMN is_missing BOOLEAN DEFAULT 0",
             "ALTER TABLE tokens ADD COLUMN is_missing BOOLEAN DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN opds_token VARCHAR(64)",
         ]:
             try:
                 conn.execute(text(migration))

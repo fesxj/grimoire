@@ -305,6 +305,19 @@
       "cardSize": "Card size",
       "comfortable": "Comfortable",
       "compact": "Compact"
+    },
+    "opds": {
+      "title": "OPDS Feed",
+      "description": "Connect e-reader apps (Kavita, Panels, Chunky, etc.) directly to your library using a personal OPDS feed URL. Regenerating or disabling the feed immediately invalidates the old URL.",
+      "enable": "Enable OPDS Feed",
+      "generating": "Generating…",
+      "feedUrl": "Feed URL",
+      "copy": "Copy",
+      "copied": "Copied",
+      "regenerate": "Regenerate URL",
+      "disable": "Disable",
+      "confirmRevoke": "Disabling OPDS will immediately revoke your feed URL. Any apps using it will lose access. Continue?",
+      "confirmDisable": "Yes, disable"
     }
   },
   "appSettings": {

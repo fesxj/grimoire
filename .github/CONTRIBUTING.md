@@ -19,6 +19,8 @@ Docker logs:
 docker compose logs grimoire
 ```
 
+Admins also have access to the logs on the settings page under the logs tab.
+
 Browser console errors (F12 → Console tab) are also useful for UI problems.
 
 ## Contributing code

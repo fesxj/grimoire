@@ -1,0 +1,46 @@
+name: Question / Help
+description: Not sure how something works, or need help getting set up?
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Happy to help! Before opening an issue, it's worth a quick check of the [README](../../blob/main/README.md) — setup steps, environment variables, and common configurations are all documented there.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you need help with?
+      description: Describe what you're trying to do and where you're stuck.
+      placeholder: |
+        Example: I'm trying to set up OPDS so I can connect Kybook on my iPad, but the feed URL isn't being accepted by the app. I've enabled OPDS_ENABLED and set BASE_URL to my server's address.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: How are you running Grimoire?
+      options:
+        - Docker Compose (DockerHub image)
+        - Docker Compose (built from source)
+        - Directly (Python + Node, no Docker)
+        - Haven't started yet
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you already tried?
+      description: Saves time for everyone if we know what you've already ruled out.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Relevant config or logs
+      description: |
+        Paste your `docker-compose.yml` environment section, any error messages, or Docker logs (`docker compose logs grimoire`).
+        Sensitive values (passwords, tokens) should be replaced with placeholders before posting.
+      render: yaml

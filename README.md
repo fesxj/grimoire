@@ -487,6 +487,16 @@ The live API is self-documented via OpenAPI. With the server running:
 
 ---
 
+## Contributing
+
+Grimoire is open source and contributions are welcome — bug reports, feature ideas, docs, and code.
+
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for full details on reporting issues, submitting pull requests, and setting up a local development environment.
+
+To report a security vulnerability privately, see [SECURITY.md](.github/SECURITY.md).
+
+---
+
 ## License
 
 GNU General Public License v3.0 — see [LICENSE](LICENSE) for details.

@@ -1,0 +1,40 @@
+name: Feature Request
+description: Suggest an idea or improvement for Grimoire
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea that would make Grimoire better? We'd love to hear it!
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation or frustration that led to this idea. A clear "why" helps a lot.
+      placeholder: |
+        Example: I have a large map collection organized by campaign. Right now I have to scroll through everything to find what I need. It would help to be able to search or filter maps by name.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to see?
+      description: Describe the feature or change you have in mind. Don't worry about being too technical — plain language is great.
+      placeholder: |
+        A search bar at the top of the Maps page that filters the list as you type.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Have you found any workarounds?
+      description: If you've found a way to work around the problem today, mention it here. It helps us understand the current impact.
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Mockups, screenshots, links to similar features in other tools, or any other context.

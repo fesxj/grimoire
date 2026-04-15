@@ -1,0 +1,85 @@
+name: Bug Report
+description: Something isn't working the way it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! The more detail you can provide, the easier it is to track down and fix.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem. What did you expect to happen, and what actually happened?
+      placeholder: |
+        Example: I clicked "Add to Favorites" on a book, but the star icon didn't turn yellow and the book doesn't appear on the Favorites page.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Walk us through exactly how to make the problem happen.
+      placeholder: |
+        1. Go to the Library
+        2. Open any book system
+        3. Click the star icon on a book
+        4. Navigate to the Favorites page
+        5. The book is not listed
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+      placeholder: The book should appear on my Favorites page.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: How are you running Grimoire?
+      options:
+        - Docker Compose (DockerHub image)
+        - Docker Compose (built from source)
+        - Directly (Python + Node, no Docker)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Grimoire version or commit
+      description: Check the Docker image tag or run `git rev-parse --short HEAD` if building from source.
+      placeholder: "e.g. latest, v1.2.0, or abc1234"
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      options:
+        - Chrome / Chromium
+        - Firefox
+        - Safari
+        - Edge
+        - Other / Not applicable (API or server-side issue)
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or error messages
+      description: |
+        Paste any error messages from the browser console (F12 → Console tab) or Docker logs (`docker compose logs grimoire`).
+        This field is formatted as code automatically — no need to add backticks.
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Screenshots, library size, unusual configuration, or anything else that might be relevant.

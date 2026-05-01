@@ -1,23 +1,23 @@
-"""Campaign CRUD, member management, and resource linking endpoints."""
+"""Campaign CRUD, member management, and resource linking endpoint handlers."""
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import Depends, HTTPException
 
+from ...auth import CurrentUser, get_current_user
 from ...config import SessionLocal
 from ...models import (
+    Book,
     Campaign,
     CampaignMember,
     CampaignResource,
-    User,
-    Book,
     GenericMap,
     Token,
+    User,
 )
-from ...auth import get_current_user, CurrentUser
 from ._helpers import (
-    is_gm_or_admin,
-    get_campaign_or_404,
     assert_can_manage,
     can_view,
+    get_campaign_or_404,
+    is_gm_or_admin,
     serialize_campaign,
 )
 from ._schemas import (
@@ -29,10 +29,7 @@ from ._schemas import (
     ResourceUpdate,
 )
 
-router = APIRouter()
 
-
-@router.get("", summary="List campaigns for the current user")
 def list_campaigns(current_user: CurrentUser = Depends(get_current_user)):
     db = SessionLocal()
     try:
@@ -89,7 +86,6 @@ def list_campaigns(current_user: CurrentUser = Depends(get_current_user)):
         db.close()
 
 
-@router.post("", summary="Create a campaign", status_code=201)
 def create_campaign(data: CampaignCreate, current_user: CurrentUser = Depends(get_current_user)):
     if data.is_gm_campaign and not is_gm_or_admin(current_user):
         raise HTTPException(403, "Only GMs and admins can create GM-run campaigns")
@@ -128,7 +124,6 @@ def create_campaign(data: CampaignCreate, current_user: CurrentUser = Depends(ge
         db.close()
 
 
-@router.get("/{campaign_id}", summary="Get a campaign")
 def get_campaign(campaign_id: str, current_user: CurrentUser = Depends(get_current_user)):
     db = SessionLocal()
     try:
@@ -182,7 +177,6 @@ def get_campaign(campaign_id: str, current_user: CurrentUser = Depends(get_curre
         db.close()
 
 
-@router.patch("/{campaign_id}", summary="Update a campaign")
 def update_campaign(
     campaign_id: str, data: CampaignUpdate, current_user: CurrentUser = Depends(get_current_user)
 ):
@@ -209,7 +203,6 @@ def update_campaign(
         db.close()
 
 
-@router.delete("/{campaign_id}", summary="Delete a campaign", status_code=204)
 def delete_campaign(campaign_id: str, current_user: CurrentUser = Depends(get_current_user)):
     db = SessionLocal()
     try:
@@ -221,7 +214,6 @@ def delete_campaign(campaign_id: str, current_user: CurrentUser = Depends(get_cu
         db.close()
 
 
-@router.get("/resources/search", summary="Search books, maps, and tokens by name")
 def search_resources_global(
     q: str = "",
     resource_type: str = None,
@@ -281,7 +273,6 @@ def search_resources_global(
         db.close()
 
 
-@router.post("/{campaign_id}/invite", summary="Invite a player to a GM campaign", status_code=201)
 def invite_member(
     campaign_id: str, data: InvitePayload, current_user: CurrentUser = Depends(get_current_user)
 ):
@@ -312,7 +303,6 @@ def invite_member(
         db.close()
 
 
-@router.patch("/{campaign_id}/members/{user_id}", summary="Accept or decline an invitation")
 def update_member_status(
     campaign_id: str,
     user_id: str,
@@ -354,7 +344,6 @@ def update_member_status(
         db.close()
 
 
-@router.delete("/{campaign_id}/members/{user_id}", summary="Remove a member", status_code=204)
 def remove_member(
     campaign_id: str, user_id: str, current_user: CurrentUser = Depends(get_current_user)
 ):
@@ -378,7 +367,6 @@ def remove_member(
         db.close()
 
 
-@router.get("/{campaign_id}/resources", summary="List linked resources")
 def list_resources(campaign_id: str, current_user: CurrentUser = Depends(get_current_user)):
     db = SessionLocal()
     try:
@@ -416,7 +404,6 @@ def list_resources(campaign_id: str, current_user: CurrentUser = Depends(get_cur
         db.close()
 
 
-@router.post("/{campaign_id}/resources", summary="Link a resource to a campaign", status_code=201)
 def add_resource(
     campaign_id: str, data: ResourceAdd, current_user: CurrentUser = Depends(get_current_user)
 ):
@@ -472,7 +459,6 @@ def add_resource(
         db.close()
 
 
-@router.patch("/{campaign_id}/resources/{resource_id}", summary="Update resource sharing")
 def update_resource(
     campaign_id: str,
     resource_id: str,
@@ -493,9 +479,6 @@ def update_resource(
         db.close()
 
 
-@router.delete(
-    "/{campaign_id}/resources/{resource_id}", summary="Unlink a resource", status_code=204
-)
 def remove_resource(
     campaign_id: str, resource_id: str, current_user: CurrentUser = Depends(get_current_user)
 ):
@@ -511,7 +494,6 @@ def remove_resource(
         db.close()
 
 
-@router.get("/{campaign_id}/eligible-members", summary="List users that can be invited")
 def eligible_members(campaign_id: str, current_user: CurrentUser = Depends(get_current_user)):
     db = SessionLocal()
     try:

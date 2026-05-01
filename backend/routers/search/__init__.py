@@ -1,0 +1,17 @@
+"""Search package — FTS5 full-text search across the library."""
+from fastapi import APIRouter
+
+from .core import search_library
+
+router = APIRouter(tags=["search"])
+router.add_api_route(
+    "/search",
+    search_library,
+    methods=["GET"],
+    summary="Full-text search",
+    description=(
+        "Searches indexed book pages using SQLite FTS5. Optionally scope to a "
+        "single book (`book_id`) or game system (`system_id`). Returns "
+        "snippets with HTML `<mark>` highlights."
+    ),
+)

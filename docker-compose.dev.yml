@@ -29,6 +29,7 @@ services:
             - __pycache__
             - "*.pyc"
             - "*.pyo"
+            - tests/
         - action: rebuild
           path: ./backend/requirements.txt
         - action: rebuild

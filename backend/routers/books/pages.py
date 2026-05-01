@@ -1,31 +1,23 @@
-"""Book page rendering, TOC, and text-extraction endpoints."""
+"""Book page rendering, TOC, and text-extraction endpoint handlers."""
 import hashlib
 import io
 import os
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy import text as sql_text
 
 import fitz  # type: ignore[import-untyped]
 from PIL import Image  # type: ignore[import-untyped]
 
-from ...config import SessionLocal, PAGE_CACHE_DIR, _valkey, _PAGE_CACHE_HEADERS, logger
+from ...config import _PAGE_CACHE_HEADERS, PAGE_CACHE_DIR, SessionLocal, _valkey, logger
+from ...models import Book
 from ._helpers import _cached_book_info, _get_pdf_doc
 
-router = APIRouter()
 
-
-@router.get(
-    "/{book_id}/toc",
-    summary="PDF table of contents",
-    description="Returns the PDF outline/bookmarks as a nested list of `{title, page, level, children}` entries. Empty list if the PDF has no bookmarks.",
-)
 def get_book_toc(book_id: str):
     db = SessionLocal()
     try:
-        from ...models import Book
-
         book = db.query(Book).filter_by(id=book_id).first()
         if not book or book.mime_type != "application/pdf":
             raise HTTPException(404)
@@ -58,11 +50,6 @@ def get_book_toc(book_id: str):
         db.close()
 
 
-@router.get(
-    "/{book_id}/page/{page_num}",
-    summary="Render a PDF page as WebP",
-    description="Renders a single PDF page to a WebP image at the requested pixel width (default 1200, max 3000). Results are cached in Valkey (if configured) and on disk. Used by the in-app reader.",
-)
 def serve_book_page(book_id: str, page_num: int, width: int = Query(1200, le=3000)):
     book_info = _cached_book_info(book_id)
     if not book_info or book_info[1] != "application/pdf":
@@ -97,7 +84,6 @@ def serve_book_page(book_id: str, page_num: int, width: int = Query(1200, le=300
     if not os.path.exists(filepath):
         db = SessionLocal()
         try:
-            from ...models import Book
             book = db.query(Book).filter_by(id=book_id).first()
             if book and not book.is_missing:
                 book.is_missing = True
@@ -133,11 +119,6 @@ def serve_book_page(book_id: str, page_num: int, width: int = Query(1200, le=300
     )
 
 
-@router.get(
-    "/{book_id}/page/{page_num}/text",
-    summary="Get page text",
-    description="Returns the extracted text content for a single page, used for accessibility alt text. For indexed books, returns from the FTS5 index; otherwise extracts directly from the PDF.",
-)
 def get_page_text(book_id: str, page_num: int):
     book_info = _cached_book_info(book_id)
     if not book_info or book_info[1] != "application/pdf":
@@ -165,11 +146,6 @@ def get_page_text(book_id: str, page_num: int):
     return {"text": doc[page_num - 1].get_text("text").strip()}
 
 
-@router.get(
-    "/{book_id}/page/{page_num}/words",
-    summary="Get page word bounding boxes",
-    description="Returns word-level bounding boxes for the page (PDFs only), used to render a selectable text overlay on top of the rasterized page image.",
-)
 def get_page_words(book_id: str, page_num: int):
     book_info = _cached_book_info(book_id)
     if not book_info or book_info[1] != "application/pdf":

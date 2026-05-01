@@ -1,21 +1,14 @@
-"""Session note endpoints for campaigns."""
+"""Session note endpoint handlers for campaigns."""
 
 import datetime
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import Depends, HTTPException, Query
 
+from ...auth import CurrentUser, get_current_user
 from ...config import SessionLocal
-from ...models import (
-    SessionNote,
-    PlayerSessionNote,
-    GMSessionNote,
-    User,
-)
-from ...auth import get_current_user, CurrentUser
-from ._helpers import get_campaign_or_404, assert_can_manage, can_view, extract_snippet
-from ._schemas import SessionNoteCreate, SessionNoteUpdate, PlayerNoteUpdate, GMNoteUpdate
-
-router = APIRouter()
+from ...models import GMSessionNote, PlayerSessionNote, SessionNote, User
+from ._helpers import assert_can_manage, can_view, extract_snippet, get_campaign_or_404
+from ._schemas import GMNoteUpdate, PlayerNoteUpdate, SessionNoteCreate, SessionNoteUpdate
 
 
 def search_session_notes(
@@ -108,7 +101,6 @@ def search_session_notes(
         db.close()
 
 
-@router.get("/{campaign_id}/sessions", summary="List session notes")
 def list_sessions(campaign_id: str, current_user: CurrentUser = Depends(get_current_user)):
     db = SessionLocal()
     try:
@@ -126,7 +118,6 @@ def list_sessions(campaign_id: str, current_user: CurrentUser = Depends(get_curr
         db.close()
 
 
-@router.post("/{campaign_id}/sessions", summary="Create a session note", status_code=201)
 def create_session(
     campaign_id: str,
     data: SessionNoteCreate,
@@ -153,7 +144,6 @@ def create_session(
         db.close()
 
 
-@router.get("/{campaign_id}/sessions/{session_id}", summary="Get a session note with all notes")
 def get_session(
     campaign_id: str,
     session_id: str,
@@ -205,7 +195,6 @@ def get_session(
         db.close()
 
 
-@router.patch("/{campaign_id}/sessions/{session_id}", summary="Update session title")
 def update_session(
     campaign_id: str,
     session_id: str,
@@ -228,9 +217,6 @@ def update_session(
         db.close()
 
 
-@router.delete(
-    "/{campaign_id}/sessions/{session_id}", summary="Delete a session note", status_code=204
-)
 def delete_session(
     campaign_id: str,
     session_id: str,
@@ -248,7 +234,6 @@ def delete_session(
         db.close()
 
 
-@router.put("/{campaign_id}/sessions/{session_id}/notes/player", summary="Save own player note")
 def upsert_player_note(
     campaign_id: str,
     session_id: str,
@@ -283,7 +268,6 @@ def upsert_player_note(
         db.close()
 
 
-@router.put("/{campaign_id}/sessions/{session_id}/notes/gm", summary="Save GM notes (owner only)")
 def upsert_gm_note(
     campaign_id: str,
     session_id: str,

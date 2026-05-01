@@ -1,0 +1,62 @@
+"""User account, bookmark, and favorite models."""
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+
+from .base import Base, _utcnow, _uuid
+
+
+class User(Base):
+    """An authenticated user of the library."""
+
+    __tablename__ = "users"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    username = Column(String(100), unique=True, nullable=False)
+    display_name = Column(String(100), nullable=True)
+    email = Column(String(254), nullable=True, unique=True, index=True)
+    hashed_password = Column(String(255), nullable=True)
+    role = Column(String(20), default="player")
+    allow_explicit = Column(Boolean, default=True)
+    opds_token = Column(String(64), nullable=True, unique=True, index=True)
+    oidc_subject = Column(String(255), nullable=True, unique=True, index=True)
+    created_at = Column(DateTime, default=_utcnow)
+
+
+class Bookmark(Base):
+    """Per-user bookmarks within a book — either a page or a text selection."""
+
+    __tablename__ = "bookmarks"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    book_id = Column(String(36), ForeignKey("books.id"), nullable=False)
+    page_number = Column(Integer, nullable=False)
+    label = Column(String(255), default="")
+    notes = Column(Text, default="")
+    selected_text = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=_utcnow)
+
+    __table_args__ = (Index("ix_bookmarks_user_book", "user_id", "book_id"),)
+
+
+class Favorite(Base):
+    """Per-user favorites across books, maps, and tokens."""
+
+    __tablename__ = "favorites"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    item_type = Column(String(20), nullable=False)
+    item_id = Column(String(36), nullable=False)
+    created_at = Column(DateTime, default=_utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "item_type", "item_id"),)

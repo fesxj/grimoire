@@ -55,4 +55,4 @@ jobs:
         run: python -c "import backend.main"
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest backend/tests/ -v

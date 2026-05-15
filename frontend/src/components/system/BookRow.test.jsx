@@ -65,6 +65,29 @@ describe('BookRow', () => {
     expect(screen.queryByText('Indexed')).not.toBeInTheDocument()
   })
 
+  it('does not show "Indexed" badge for image-only PDFs', () => {
+    render(<BookRow book={makeBook({ indexed: true, index_error: 'image-only' })} onOpen={() => {}} />)
+    expect(screen.queryByText('Indexed')).not.toBeInTheDocument()
+  })
+
+  // --- image-only badge ---
+
+  it('shows "Image Only" badge when indexed and index_error is image-only', () => {
+    render(<BookRow book={makeBook({ indexed: true, index_error: 'image-only' })} onOpen={() => {}} />)
+    expect(screen.getByText('Image Only')).toBeInTheDocument()
+  })
+
+  it('does not show "Image Only" badge for normally indexed books', () => {
+    render(<BookRow book={makeBook({ indexed: true, index_error: '' })} onOpen={() => {}} />)
+    expect(screen.queryByText('Image Only')).not.toBeInTheDocument()
+  })
+
+  it('"Image Only" badge has the correct tooltip', () => {
+    render(<BookRow book={makeBook({ indexed: true, index_error: 'image-only' })} onOpen={() => {}} />)
+    const badge = screen.getByText('Image Only')
+    expect(badge.title).toBe('This PDF contains only scanned images — no text layer to search')
+  })
+
   // --- index_failed badge ---
 
   it('shows "Index Failed" badge when index_failed is true', () => {

@@ -124,8 +124,8 @@ class TestIndexBookTextIndexFailed:
 
         assert result is False
 
-    def test_sets_index_failed_when_no_text_extracted(self):
-        """When extract_text_from_pdf returns empty, book is marked index_failed (not indexed)."""
+    def test_image_only_pdf_marked_indexed(self):
+        """When extract_text_from_pdf returns empty, image-only PDF is marked indexed=True with index_error='image-only'."""
         uid = str(uuid.uuid4())[:8]
         db = SessionLocal()
         try:
@@ -146,10 +146,10 @@ class TestIndexBookTextIndexFailed:
                 result = index_book_text(book, "/tmp", db)
 
             db.refresh(book)
-            assert result is False
-            assert book.indexed is False
-            assert book.index_failed is True
-            assert "No text extracted" in book.index_error
+            assert result is True
+            assert book.indexed is True
+            assert book.index_failed is False
+            assert book.index_error == "image-only"
         finally:
             db.close()
 

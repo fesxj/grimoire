@@ -894,6 +894,8 @@
     "editBook": "Modifier les métadonnées",
     "indexed": "Indexé",
     "indexedTitle": "Indexé en texte intégral",
+    "imageOnly": "Images uniquement",
+    "imageOnlyTitle": "Ce PDF ne contient que des images numérisées — aucune couche de texte consultable",
     "indexFailed": "Échec d'indexation",
     "indexFailedTitle": "Échec de l'indexation",
     "indexFailedWithError": "Échec de l'indexation : {{error}}",

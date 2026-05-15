@@ -20,6 +20,7 @@ const MATCH_BY_OPTIONS = ['none', 'email', 'username']
 
 const STRING_FIELDS = [
   'oidc_issuer_url',
+  'oidc_token_issuer',
   'oidc_authorization_endpoint',
   'oidc_token_endpoint',
   'oidc_userinfo_endpoint',
@@ -112,14 +113,22 @@ export default function OIDCSettingsSection() {
     setDiscoverError('')
     try {
       const doc = await api.post('/auth/openid/discover', { issuer_url: issuer })
-      // Populate empty fields; don't overwrite values the admin already set.
       const updates = {}
+      // Always update oidc_issuer_url with the canonical issuer from the discovery
+      // document — the token's `iss` claim must match this exactly, and IdPs
+      // often return a different value than the URL the user typed (e.g. they
+      // typed the full .well-known URL, or there's a trailing-slash difference).
+      if (doc.issuer && !isLocked('oidc_issuer_url')) {
+        updates['oidc_issuer_url'] = doc.issuer
+      }
+      // Populate empty fields; don't overwrite values the admin already set.
       const fillIfEmpty = (key, value) => {
         if (!value) return
         if (isLocked(key)) return
         if ((draft[key] || '').trim()) return
         updates[key] = value
       }
+      fillIfEmpty('oidc_token_issuer', doc.issuer)
       fillIfEmpty('oidc_authorization_endpoint', doc.authorization_endpoint)
       fillIfEmpty('oidc_token_endpoint', doc.token_endpoint)
       fillIfEmpty('oidc_userinfo_endpoint', doc.userinfo_endpoint)
@@ -392,6 +401,10 @@ export default function OIDCSettingsSection() {
         </div>
       </div>
 
+      {fieldRow({
+        key: 'oidc_token_issuer',
+        label: t('authSettings.oidc.tokenIssuer'),
+      })}
       {fieldRow({
         key: 'oidc_authorization_endpoint',
         label: t('authSettings.oidc.authorizationEndpoint'),

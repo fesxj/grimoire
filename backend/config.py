@@ -46,6 +46,7 @@ def _bool_env(name: str) -> Optional[bool]:
 OIDC_ENV: dict = {
     "oidc_enabled": _bool_env("OIDC_ENABLED"),
     "oidc_issuer_url": os.environ.get("OIDC_ISSUER_URL"),
+    "oidc_token_issuer": os.environ.get("OIDC_TOKEN_ISSUER"),
     "oidc_authorization_endpoint": os.environ.get("OIDC_AUTHORIZATION_ENDPOINT"),
     "oidc_token_endpoint": os.environ.get("OIDC_TOKEN_ENDPOINT"),
     "oidc_userinfo_endpoint": os.environ.get("OIDC_USERINFO_ENDPOINT"),

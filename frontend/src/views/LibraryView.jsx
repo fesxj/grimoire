@@ -7,7 +7,7 @@ import Spinner from '../components/Spinner'
 import Tag from '../components/Tag'
 import FavoriteButton from '../components/FavoriteButton'
 import { getUserPrefs } from '../hooks/useUserPrefs'
-import { getRecentBooks, getBookPrefs } from '../hooks/useBookPrefs'
+import { getRecentBooks, getBookPrefs, removeRecentBook } from '../hooks/useBookPrefs'
 import { useFavorites } from '../context/FavoritesContext'
 
 function SystemCard({ system, onClick, compact }) {
@@ -198,6 +198,7 @@ export default function LibraryView() {
   const { isFavorite } = useFavorites()
   const [systems, setSystems] = useState(null)
   const [favOnly, setFavOnly] = useState(false)
+  const [recentBooks, setRecentBooks] = useState(() => getRecentBooks())
 
   useEffect(() => {
     api.get('/systems').then(setSystems)
@@ -227,7 +228,6 @@ export default function LibraryView() {
 
   const compact = cardSize === 'compact'
   const minCard = compact ? '130px' : '220px'
-  const recentBooks = getRecentBooks()
 
   return (
     <div
@@ -279,6 +279,39 @@ export default function LibraryView() {
                   onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-card-hover)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'var(--bg-card)')}
                 >
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeRecentBook(book.id)
+                      setRecentBooks(getRecentBooks())
+                    }}
+                    title={t('library.removeFromRecent')}
+                    style={{
+                      position: 'absolute',
+                      top: 4,
+                      right: 4,
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-muted)',
+                      fontSize: 12,
+                      lineHeight: 1,
+                      padding: '1px 3px',
+                      borderRadius: 3,
+                      opacity: 0,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.opacity = 1
+                      e.currentTarget.style.color = 'var(--text)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.opacity = 0
+                    }}
+                    onFocus={(e) => (e.currentTarget.style.opacity = 1)}
+                    onBlur={(e) => (e.currentTarget.style.opacity = 0)}
+                  >
+                    ✕
+                  </button>
                   {progress > 0 && (
                     <div
                       style={{

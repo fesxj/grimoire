@@ -31,6 +31,7 @@ _DEFAULTS = {
     # OIDC — all stored as strings; "" means unset
     "oidc_enabled": "false",
     "oidc_issuer_url": "",
+    "oidc_token_issuer": "",
     "oidc_authorization_endpoint": "",
     "oidc_token_endpoint": "",
     "oidc_userinfo_endpoint": "",
@@ -51,6 +52,7 @@ _VALID_MATCH_BY = ("none", "email", "username")
 _VALID_SIGNING_ALGS = ("RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "PS256", "PS384", "PS512", "HS256")
 _OIDC_STRING_FIELDS = (
     "oidc_issuer_url",
+    "oidc_token_issuer",
     "oidc_authorization_endpoint",
     "oidc_token_endpoint",
     "oidc_userinfo_endpoint",
@@ -152,6 +154,7 @@ def oidc_effective(raw: dict) -> dict:
     return {
         "oidc_enabled": b("oidc_enabled"),
         "oidc_issuer_url": s("oidc_issuer_url"),
+        "oidc_token_issuer": s("oidc_token_issuer"),
         "oidc_authorization_endpoint": s("oidc_authorization_endpoint"),
         "oidc_token_endpoint": s("oidc_token_endpoint"),
         "oidc_userinfo_endpoint": s("oidc_userinfo_endpoint"),

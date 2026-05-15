@@ -203,6 +203,41 @@ class TestDiscovery:
         assert body["jwks_uri"] == fake_doc["jwks_uri"]
         assert "extra" not in body
 
+    def test_discover_accepts_full_openid_configuration_url(self, client, admin_headers):
+        fake_doc = {
+            "issuer": "https://auth.example.com/application/o/app",
+            "authorization_endpoint": "https://auth.example.com/application/o/app/authorize/",
+            "token_endpoint": "https://auth.example.com/application/o/token/",
+            "userinfo_endpoint": "https://auth.example.com/application/o/userinfo/",
+            "jwks_uri": "https://auth.example.com/application/o/app/jwks/",
+        }
+
+        class FakeResp:
+            status_code = 200
+
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return fake_doc
+
+        with patch("backend.routers.oidc.httpx.get", return_value=FakeResp()) as mock_get:
+            resp = client.post(
+                "/api/auth/openid/discover",
+                headers=admin_headers,
+                json={
+                    "issuer_url": "https://auth.example.com/application/o/app/.well-known/openid-configuration"
+                },
+            )
+        assert resp.status_code == 200
+        body = resp.json()
+        # The canonical issuer from the discovery doc must be returned so the
+        # frontend can save it back as oidc_issuer_url for iss claim validation.
+        assert body["issuer"] == fake_doc["issuer"]
+        # The URL must not have /.well-known/openid-configuration appended twice
+        called_url = mock_get.call_args[0][0]
+        assert called_url.count(".well-known/openid-configuration") == 1
+
     def test_discover_handles_idp_failure(self, client, admin_headers):
         with patch(
             "backend.routers.oidc.httpx.get",

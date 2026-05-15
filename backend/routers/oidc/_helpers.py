@@ -64,21 +64,32 @@ def _pkce_pair() -> tuple[str, str]:
     return verifier, challenge
 
 
-def _try_endpoint(issuer: str, key: str) -> str:
-    """Best-effort discovery fallback for a missing endpoint."""
+def _discovery_doc(issuer: str) -> dict:
+    """Fetch and return the OpenID Connect discovery document, or {} on failure."""
     if not issuer:
-        return ""
+        return {}
+    issuer = issuer.strip()
+    if issuer.endswith("/.well-known/openid-configuration"):
+        url = issuer
+    else:
+        url = f"{issuer.rstrip('/')}/.well-known/openid-configuration"
     try:
-        resp = httpx.get(
-            f"{issuer.rstrip('/')}/.well-known/openid-configuration",
-            timeout=5.0,
-            follow_redirects=True,
-        )
+        resp = httpx.get(url, timeout=5.0, follow_redirects=True)
         if resp.status_code == 200:
-            return resp.json().get(key, "") or ""
+            return resp.json() or {}
     except httpx.HTTPError:
         pass
-    return ""
+    return {}
+
+
+def _try_endpoint(issuer: str, key: str) -> str:
+    """Best-effort discovery fallback for a missing endpoint."""
+    return _discovery_doc(issuer).get(key, "") or ""
+
+
+def _discover_issuer(issuer_url: str) -> str:
+    """Return the canonical issuer from the discovery document, falling back to issuer_url."""
+    return _discovery_doc(issuer_url).get("issuer", "") or issuer_url
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +137,7 @@ def _validate_id_token(
             id_token,
             keys,
             claims_options={
-                "iss": {"essential": True, "value": issuer.rstrip("/")},
+                "iss": {"essential": True, "value": issuer},
                 "aud": {"essential": True, "value": client_id},
                 "exp": {"essential": True},
             },
@@ -139,7 +150,7 @@ def _validate_id_token(
                 id_token,
                 keys,
                 claims_options={
-                    "iss": {"essential": True, "value": issuer.rstrip("/")},
+                    "iss": {"essential": True, "value": issuer},
                     "aud": {"essential": True, "value": client_id},
                     "exp": {"essential": True},
                 },

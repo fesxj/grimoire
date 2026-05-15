@@ -26,6 +26,7 @@ from ..settings._helpers import (
 )
 from ._helpers import (
     _OIDCError,
+    _discover_issuer,
     _fetch_userinfo,
     _pkce_pair,
     _resolve_user,
@@ -44,7 +45,10 @@ def discover(data: DiscoverRequest, _: CurrentUser = Depends(require_admin)):
     if not (issuer.startswith("https://") or issuer.startswith("http://")):
         raise HTTPException(400, "Issuer URL must start with http:// or https://")
 
-    url = f"{issuer}/.well-known/openid-configuration"
+    if issuer.endswith("/.well-known/openid-configuration"):
+        url = issuer
+    else:
+        url = f"{issuer}/.well-known/openid-configuration"
     try:
         resp = httpx.get(url, timeout=10.0, follow_redirects=True)
         resp.raise_for_status()
@@ -171,11 +175,14 @@ def oidc_callback(
         if not id_token:
             return _redirect_with_error("no id_token returned")
 
-        # Validate ID token
+        # Validate ID token — use the explicit token_issuer when set, otherwise
+        # fetch the canonical issuer from the discovery doc so the iss claim
+        # matches exactly regardless of what the admin typed as the issuer URL.
+        token_issuer = eff["oidc_token_issuer"] or _discover_issuer(eff["oidc_issuer_url"])
         try:
             claims = _validate_id_token(
                 id_token,
-                issuer=eff["oidc_issuer_url"],
+                issuer=token_issuer,
                 client_id=eff["oidc_client_id"],
                 jwks_uri=eff["oidc_jwks_uri"]
                 or _try_endpoint(eff["oidc_issuer_url"], "jwks_uri"),

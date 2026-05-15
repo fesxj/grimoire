@@ -48,3 +48,10 @@ export function getRecentBooks() {
     return []
   }
 }
+
+export function removeRecentBook(bookId) {
+  try {
+    const list = getRecentBooks().filter((b) => b.id !== bookId)
+    localStorage.setItem(RECENT_KEY, JSON.stringify(list))
+  } catch {}
+}

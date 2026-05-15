@@ -26,6 +26,7 @@ class SettingsPatch(BaseModel):
     # OIDC config
     oidc_enabled: Optional[bool] = None
     oidc_issuer_url: Optional[str] = None
+    oidc_token_issuer: Optional[str] = None
     oidc_authorization_endpoint: Optional[str] = None
     oidc_token_endpoint: Optional[str] = None
     oidc_userinfo_endpoint: Optional[str] = None

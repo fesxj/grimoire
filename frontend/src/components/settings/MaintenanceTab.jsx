@@ -460,9 +460,11 @@ function ScheduledRescanSection() {
                 {t('maintenance.scheduledRescan.at')}
               </span>
               <input
+                id="rescan-time"
                 type="time"
                 value={localTime}
                 onChange={(e) => setLocalTime(e.target.value)}
+                aria-label={t('maintenance.scheduledRescan.at')}
                 style={{
                   fontSize: 14,
                   padding: '6px 10px',
@@ -482,6 +484,7 @@ function ScheduledRescanSection() {
           {/* Also run database cleanup toggle */}
           {schedule !== 'off' && (
             <label
+              htmlFor="cleanup-on-rescan"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -493,6 +496,7 @@ function ScheduledRescanSection() {
               }}
             >
               <input
+                id="cleanup-on-rescan"
                 type="checkbox"
                 checked={cleanupOnRescan}
                 onChange={(e) => setCleanupOnRescan(e.target.checked)}
@@ -699,24 +703,27 @@ function ExportTagsSection() {
       </p>
 
       <div style={{ display: 'flex', gap: 20, marginBottom: 16, flexWrap: 'wrap' }}>
-        <label style={checkboxStyle}>
+        <label htmlFor="export-tags-library" style={checkboxStyle}>
           <input
+            id="export-tags-library"
             type="checkbox"
             checked={includeLibrary}
             onChange={(e) => setIncludeLibrary(e.target.checked)}
           />
           {t('maintenance.tagExport.library')}
         </label>
-        <label style={checkboxStyle}>
+        <label htmlFor="export-tags-maps" style={checkboxStyle}>
           <input
+            id="export-tags-maps"
             type="checkbox"
             checked={includeMaps}
             onChange={(e) => setIncludeMaps(e.target.checked)}
           />
           {t('maintenance.tagExport.maps')}
         </label>
-        <label style={checkboxStyle}>
+        <label htmlFor="export-tags-tokens" style={checkboxStyle}>
           <input
+            id="export-tags-tokens"
             type="checkbox"
             checked={includeTokens}
             onChange={(e) => setIncludeTokens(e.target.checked)}

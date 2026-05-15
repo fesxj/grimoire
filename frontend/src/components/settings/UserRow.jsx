@@ -28,6 +28,8 @@ function SetEmailInline({ initial, onSave, onCancel }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
       <input
         type="email"
+        id="set-email-inline"
+        aria-label={t('users.emailPlaceholder')}
         value={value}
         onChange={(e) => {
           setValue(e.target.value)
@@ -86,6 +88,8 @@ function SetPasswordInline({ onSave, onCancel }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
       <input
         type="password"
+        id="set-password-inline"
+        aria-label={t('users.newPasswordPlaceholder')}
         value={value}
         onChange={(e) => {
           setValue(e.target.value)
@@ -237,6 +241,8 @@ export default function UserRow({
         {/* Bottom row: role select + explicit */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <select
+            id={`role-mobile-${user.id}`}
+            aria-label={t('users.role')}
             value={user.role}
             onChange={(e) => onRoleChange(user.id, e.target.value)}
             disabled={isSelf}
@@ -258,6 +264,7 @@ export default function UserRow({
           </select>
 
           <label
+            htmlFor={`explicit-mobile-${user.id}`}
             title={t('users.allowExplicitTitle')}
             style={{
               display: 'flex',
@@ -268,6 +275,7 @@ export default function UserRow({
             }}
           >
             <input
+              id={`explicit-mobile-${user.id}`}
               type="checkbox"
               checked={user.allow_explicit ?? true}
               onChange={() => !isSelf && onExplicitChange(user.id, !(user.allow_explicit ?? true))}
@@ -405,6 +413,7 @@ export default function UserRow({
         <RoleBadge role={user.role} />
 
         <label
+          htmlFor={`explicit-desktop-${user.id}`}
           title={t('users.allowExplicitTitle')}
           style={{
             display: 'flex',
@@ -415,6 +424,7 @@ export default function UserRow({
           }}
         >
           <input
+            id={`explicit-desktop-${user.id}`}
             type="checkbox"
             checked={user.allow_explicit ?? true}
             onChange={() => !isSelf && onExplicitChange(user.id, !(user.allow_explicit ?? true))}
@@ -432,6 +442,8 @@ export default function UserRow({
         </label>
 
         <select
+          id={`role-desktop-${user.id}`}
+          aria-label={t('users.role')}
           value={user.role}
           onChange={(e) => onRoleChange(user.id, e.target.value)}
           disabled={isSelf}

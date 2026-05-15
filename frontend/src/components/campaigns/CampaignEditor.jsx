@@ -104,8 +104,9 @@ export default function CampaignEditor({ campaign, isGmOrAdmin, onClose, onSaved
 
         <form onSubmit={submit}>
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>{t('campaignEditor.nameLabel')}</label>
+            <label htmlFor="campaign-name" style={labelStyle}>{t('campaignEditor.nameLabel')}</label>
             <input
+              id="campaign-name"
               value={form.name}
               onChange={(e) => set('name', e.target.value)}
               placeholder={t('campaignEditor.namePlaceholder')}
@@ -115,8 +116,9 @@ export default function CampaignEditor({ campaign, isGmOrAdmin, onClose, onSaved
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>{t('campaignEditor.descriptionLabel')}</label>
+            <label htmlFor="campaign-description" style={labelStyle}>{t('campaignEditor.descriptionLabel')}</label>
             <textarea
+              id="campaign-description"
               value={form.description}
               onChange={(e) => set('description', e.target.value)}
               placeholder={t('campaignEditor.descriptionPlaceholder')}
@@ -126,8 +128,9 @@ export default function CampaignEditor({ campaign, isGmOrAdmin, onClose, onSaved
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={labelStyle}>{t('campaignEditor.systemLabel')}</label>
+            <label htmlFor="campaign-system" style={labelStyle}>{t('campaignEditor.systemLabel')}</label>
             <select
+              id="campaign-system"
               value={form.system_id}
               onChange={(e) => set('system_id', e.target.value)}
               style={{ ...inputStyle, appearance: 'auto' }}
@@ -143,8 +146,9 @@ export default function CampaignEditor({ campaign, isGmOrAdmin, onClose, onSaved
 
           {(form.is_gm_campaign || (isEdit && campaign?.is_gm_campaign)) && (
             <div style={{ marginBottom: 16 }}>
-              <label style={labelStyle}>{t('campaignEditor.gmTitleLabel')}</label>
+              <label htmlFor="campaign-gm-title" style={labelStyle}>{t('campaignEditor.gmTitleLabel')}</label>
               <input
+                id="campaign-gm-title"
                 value={form.gm_title}
                 onChange={(e) => set('gm_title', e.target.value)}
                 placeholder={t('campaignEditor.gmTitlePlaceholder')}
@@ -159,6 +163,7 @@ export default function CampaignEditor({ campaign, isGmOrAdmin, onClose, onSaved
           {!isEdit && isGmOrAdmin && (
             <div style={{ marginBottom: 16, paddingTop: 4, borderTop: '1px solid var(--border)' }}>
               <label
+                htmlFor="campaign-is-gm"
                 style={{
                   ...labelStyle,
                   display: 'flex',
@@ -169,6 +174,7 @@ export default function CampaignEditor({ campaign, isGmOrAdmin, onClose, onSaved
                 }}
               >
                 <input
+                  id="campaign-is-gm"
                   type="checkbox"
                   checked={form.is_gm_campaign}
                   onChange={(e) => set('is_gm_campaign', e.target.checked)}

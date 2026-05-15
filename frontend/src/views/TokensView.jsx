@@ -287,6 +287,7 @@ export default function TokensView() {
                   }}
                 />
                 <input
+                  id="tokens-filter"
                   type="text"
                   placeholder={t('tokens.filterPlaceholder')}
                   value={filter}
@@ -553,8 +554,10 @@ export default function TokensView() {
                 : t('common.nothingSelected')}
             </span>
             <input
+              id="tokens-bulk-tag-input"
               ref={bulkInputRef}
               type="text"
+              aria-label={t('tokens.tagsPlaceholder')}
               value={bulkInput}
               onChange={(e) => setBulkInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && applyBulkTags()}

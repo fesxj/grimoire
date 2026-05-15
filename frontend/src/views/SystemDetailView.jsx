@@ -279,7 +279,9 @@ export default function SystemDetailView() {
                 }}
               />
               <input
+                id="system-detail-search"
                 type="text"
+                aria-label={t('systemDetail.searchWithin', { name: system.name })}
                 value={searchQuery}
                 onChange={handleSearchInput}
                 placeholder={t('systemDetail.searchWithin', { name: system.name })}

@@ -99,6 +99,7 @@ export default function SearchView() {
 
       <div style={{ position: 'relative', marginBottom: 28 }}>
         <input
+          id="search-view-input"
           type="text"
           value={query}
           onChange={handleInput}
@@ -152,6 +153,7 @@ export default function SearchView() {
 
               {availableSystems.length > 1 && (
                 <select
+                  id="search-system-filter"
                   value={systemFilter}
                   onChange={(e) => setSystemFilter(e.target.value)}
                   aria-label={t('search.filterSystem')}
@@ -168,6 +170,7 @@ export default function SearchView() {
 
               {results.results?.length > 0 && (
                 <select
+                  id="search-sort"
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value)}
                   aria-label={t('common.sort')}

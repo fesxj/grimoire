@@ -188,7 +188,7 @@ export default function OIDCSettingsSection() {
     const locked = isLocked(key)
     return (
       <div key={key} style={{ marginBottom: 14 }}>
-        <label style={fieldLabelStyle}>
+        <label htmlFor={key} style={fieldLabelStyle}>
           <span>{label}</span>
           {locked && (
             <span style={lockedTagStyle} title={t('authSettings.oidc.envLockedTitle')}>
@@ -199,6 +199,7 @@ export default function OIDCSettingsSection() {
           {savedField === key && <LuCircleCheck size={13} style={{ color: 'var(--green)' }} />}
         </label>
         <input
+          id={key}
           type={type}
           value={draft[key] ?? ''}
           onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
@@ -346,7 +347,7 @@ export default function OIDCSettingsSection() {
 
       {/* Issuer URL with Autopopulate */}
       <div style={{ marginBottom: 14 }}>
-        <label style={fieldLabelStyle}>
+        <label htmlFor="oidc_issuer_url" style={fieldLabelStyle}>
           <span>{t('authSettings.oidc.issuerUrl')}</span>
           {isLocked('oidc_issuer_url') && (
             <span style={lockedTagStyle}>
@@ -360,6 +361,7 @@ export default function OIDCSettingsSection() {
         </label>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
+            id="oidc_issuer_url"
             type="text"
             value={draft.oidc_issuer_url ?? ''}
             onChange={(e) => setDraft((d) => ({ ...d, oidc_issuer_url: e.target.value }))}
@@ -424,7 +426,7 @@ export default function OIDCSettingsSection() {
 
       {/* Client secret — masked, set/clear pattern */}
       <div style={{ marginBottom: 14 }}>
-        <label style={fieldLabelStyle}>
+        <label htmlFor="oidc_client_secret" style={fieldLabelStyle}>
           <span>{t('authSettings.oidc.clientSecret')}</span>
           {isLocked('oidc_client_secret') && (
             <span style={lockedTagStyle}>
@@ -456,6 +458,7 @@ export default function OIDCSettingsSection() {
           <div style={{ display: 'flex', gap: 8 }}>
             <div style={{ flex: 1, position: 'relative' }}>
               <input
+                id="oidc_client_secret"
                 type={showSecret ? 'text' : 'password'}
                 value={secretDraft}
                 onChange={(e) => setSecretDraft(e.target.value)}
@@ -536,7 +539,7 @@ export default function OIDCSettingsSection() {
 
       {/* Signing alg */}
       <div style={{ marginBottom: 14 }}>
-        <label style={fieldLabelStyle}>
+        <label htmlFor="oidc_signing_alg" style={fieldLabelStyle}>
           <span>{t('authSettings.oidc.signingAlg')}</span>
           {isLocked('oidc_signing_alg') && (
             <span style={lockedTagStyle}>
@@ -545,6 +548,7 @@ export default function OIDCSettingsSection() {
           )}
         </label>
         <select
+          id="oidc_signing_alg"
           value={draft.oidc_signing_alg || 'RS256'}
           onChange={(e) => handleSelectChange('oidc_signing_alg', e.target.value)}
           disabled={isLocked('oidc_signing_alg')}
@@ -576,7 +580,7 @@ export default function OIDCSettingsSection() {
 
       {/* Match by */}
       <div style={{ marginBottom: 14 }}>
-        <label style={fieldLabelStyle}>
+        <label htmlFor="oidc_match_by" style={fieldLabelStyle}>
           <span>{t('authSettings.oidc.matchBy')}</span>
           {isLocked('oidc_match_by') && (
             <span style={lockedTagStyle}>
@@ -585,6 +589,7 @@ export default function OIDCSettingsSection() {
           )}
         </label>
         <select
+          id="oidc_match_by"
           value={draft.oidc_match_by || 'none'}
           onChange={(e) => handleSelectChange('oidc_match_by', e.target.value)}
           disabled={isLocked('oidc_match_by')}

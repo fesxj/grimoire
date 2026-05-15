@@ -286,6 +286,7 @@ export default function MapsView() {
                   }}
                 />
                 <input
+                  id="maps-filter"
                   type="text"
                   placeholder={t('maps.filterPlaceholder')}
                   value={filter}
@@ -552,8 +553,10 @@ export default function MapsView() {
                 : t('common.nothingSelected')}
             </span>
             <input
+              id="maps-bulk-tag-input"
               ref={bulkInputRef}
               type="text"
+              aria-label={t('maps.tagsPlaceholder')}
               value={bulkInput}
               onChange={(e) => setBulkInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && applyBulkTags()}

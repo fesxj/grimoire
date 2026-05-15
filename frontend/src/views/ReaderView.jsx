@@ -383,6 +383,7 @@ export default function ReaderView() {
               <LuChevronLeft size={14} />
             </button>
             <input
+              id="reader-page-input"
               type="text"
               value={pageInput}
               onChange={(e) => setPageInput(e.target.value)}

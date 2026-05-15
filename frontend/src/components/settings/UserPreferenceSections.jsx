@@ -182,6 +182,8 @@ export function LanguageSection() {
         {t('userSettings.language.description')}
       </p>
       <select
+        id="language-select"
+        aria-label={t('userSettings.language.title')}
         value={lang}
         onChange={handleLang}
         style={{

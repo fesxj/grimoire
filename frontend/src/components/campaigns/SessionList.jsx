@@ -97,6 +97,8 @@ function InlineNoteEditor({ campaign, sessionId, userId }) {
         </span>
       </div>
       <textarea
+        id="inline-note-editor"
+        aria-label={t('sessions.myNotes')}
         value={note}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={t('sessions.notePlaceholder')}
@@ -278,6 +280,8 @@ export default function SessionList({ campaign, isOwner, onSelectSession, userId
           }}
         />
         <input
+          id="session-search"
+          aria-label={t('sessions.searchPlaceholder')}
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
           placeholder={t('sessions.searchPlaceholder')}
@@ -330,8 +334,9 @@ export default function SessionList({ campaign, isOwner, onSelectSession, userId
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div>
-              <label style={labelStyle}>{t('sessions.dateLabel')}</label>
+              <label htmlFor="session-new-date" style={labelStyle}>{t('sessions.dateLabel')}</label>
               <input
+                id="session-new-date"
                 type="date"
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
@@ -340,8 +345,9 @@ export default function SessionList({ campaign, isOwner, onSelectSession, userId
               />
             </div>
             <div style={{ flex: 1, minWidth: 160 }}>
-              <label style={labelStyle}>{t('sessions.titleLabel')}</label>
+              <label htmlFor="session-new-title" style={labelStyle}>{t('sessions.titleLabel')}</label>
               <input
+                id="session-new-title"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder={t('sessions.titlePlaceholder')}

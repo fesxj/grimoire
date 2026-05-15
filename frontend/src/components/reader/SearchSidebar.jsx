@@ -77,6 +77,7 @@ export default function SearchSidebar({ bookId, onGoToPage, onClose }) {
       >
         <LuSearch size={15} color="var(--text-muted)" aria-hidden="true" />
         <input
+          id="search-sidebar-input"
           ref={inputRef}
           type="text"
           value={query}

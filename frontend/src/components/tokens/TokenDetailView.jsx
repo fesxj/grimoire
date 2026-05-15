@@ -318,6 +318,7 @@ export default function TokenDetailView() {
           {canEdit && (
             <div style={{ marginBottom: 20 }}>
               <label
+                htmlFor="token-is-explicit"
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -327,6 +328,7 @@ export default function TokenDetailView() {
                 }}
               >
                 <input
+                  id="token-is-explicit"
                   type="checkbox"
                   checked={token.is_explicit || false}
                   onChange={toggleExplicit}

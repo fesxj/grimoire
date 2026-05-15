@@ -87,6 +87,8 @@ export function MemberRow({
         ) : editingChar ? (
           <div style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
             <input
+              id={`char-name-${member.user_id}`}
+              aria-label={t('members.characterNamePlaceholder')}
               value={charValue}
               onChange={(e) => setCharValue(e.target.value)}
               placeholder={t('members.characterNamePlaceholder')}

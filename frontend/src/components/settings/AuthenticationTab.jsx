@@ -222,6 +222,7 @@ export default function AuthenticationTab() {
         </p>
 
         <label
+          htmlFor="custom_login_message_enabled"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -232,6 +233,7 @@ export default function AuthenticationTab() {
           }}
         >
           <input
+            id="custom_login_message_enabled"
             type="checkbox"
             checked={values.custom_login_message_enabled}
             onChange={() => toggle('custom_login_message_enabled')}
@@ -313,6 +315,7 @@ export default function AuthenticationTab() {
         </p>
 
         <label
+          htmlFor="password_auth_enabled"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -323,6 +326,7 @@ export default function AuthenticationTab() {
           }}
         >
           <input
+            id="password_auth_enabled"
             type="checkbox"
             checked={values.password_auth_enabled}
             onChange={() => toggle('password_auth_enabled')}

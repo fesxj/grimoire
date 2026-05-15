@@ -59,11 +59,13 @@ export function DisplayNameSection() {
       >
         <div style={{ flex: 1, minWidth: 180 }}>
           <label
+            htmlFor="display-name"
             style={{ display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 5 }}
           >
             {t('userSettings.displayName.label')}
           </label>
           <input
+            id="display-name"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={user?.username}
@@ -152,11 +154,13 @@ export function EmailSection() {
       >
         <div style={{ flex: 1, minWidth: 220 }}>
           <label
+            htmlFor="user-email"
             style={{ display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 5 }}
           >
             {t('userSettings.email.label')}
           </label>
           <input
+            id="user-email"
             type="email"
             value={value}
             onChange={(e) => setValue(e.target.value)}
@@ -230,6 +234,7 @@ export function ExplicitContentSection() {
         {t('userSettings.contentPreferences.description')}
       </p>
       <label
+        htmlFor="explicit-content-allowed"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -239,6 +244,7 @@ export function ExplicitContentSection() {
         }}
       >
         <input
+          id="explicit-content-allowed"
           type="checkbox"
           checked={allowed}
           onChange={toggle}
@@ -291,18 +297,21 @@ export function ChangePasswordSection() {
 
   const fields = [
     {
+      id: 'change-password-current',
       label: t('userSettings.changePassword.currentPassword'),
       value: current,
       onChange: setCurrent,
       complete: 'current-password',
     },
     {
+      id: 'change-password-new',
       label: t('userSettings.changePassword.newPassword'),
       value: next,
       onChange: setNext,
       complete: 'new-password',
     },
     {
+      id: 'change-password-confirm',
       label: t('userSettings.changePassword.confirmNewPassword'),
       value: confirm,
       onChange: setConfirm,
@@ -323,14 +332,16 @@ export function ChangePasswordSection() {
         onSubmit={handleSubmit}
         style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 360 }}
       >
-        {fields.map(({ label, value, onChange, complete }) => (
+        {fields.map(({ label, value, onChange, complete, id }) => (
           <div key={label}>
             <label
+              htmlFor={id}
               style={{ display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 5 }}
             >
               {label}
             </label>
             <input
+              id={id}
               type="password"
               value={value}
               onChange={(e) => onChange(e.target.value)}
@@ -473,6 +484,7 @@ export function OPDSSection() {
             {/* Feed URL display */}
             <div>
               <label
+                htmlFor="opds-feed-url"
                 style={{
                   display: 'block',
                   fontSize: 13,
@@ -484,6 +496,7 @@ export function OPDSSection() {
               </label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <input
+                  id="opds-feed-url"
                   readOnly
                   value={status.feed_url || ''}
                   style={{

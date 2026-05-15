@@ -56,12 +56,14 @@ export default function SystemEditor({ system, onSave }) {
   const field = (label, key, type = 'text') => (
     <div style={{ marginBottom: 12 }}>
       <label
+        htmlFor={`system-field-${key}`}
         style={{ fontSize: 14, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}
       >
         {label}
       </label>
       {type === 'textarea' ? (
         <textarea
+          id={`system-field-${key}`}
           value={form[key]}
           onChange={(e) => setForm({ ...form, [key]: e.target.value })}
           rows={3}
@@ -69,6 +71,7 @@ export default function SystemEditor({ system, onSave }) {
         />
       ) : (
         <input
+          id={`system-field-${key}`}
           type="text"
           value={form[key]}
           onChange={(e) => setForm({ ...form, [key]: e.target.value })}
@@ -101,6 +104,7 @@ export default function SystemEditor({ system, onSave }) {
           {field(t('systemEditor.description'), 'description', 'textarea')}
           <div style={{ marginBottom: 12 }}>
             <label
+              htmlFor="system-tag-input"
               style={{
                 fontSize: 14,
                 color: 'var(--text-muted)',
@@ -158,6 +162,7 @@ export default function SystemEditor({ system, onSave }) {
                 </span>
               ))}
               <input
+                id="system-tag-input"
                 ref={tagInputRef}
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
@@ -199,17 +204,21 @@ export default function SystemEditor({ system, onSave }) {
                   style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}
                 >
                   <input
+                    id={`publisher-name-${idx}`}
                     type="text"
                     value={p.name}
                     onChange={(e) => setPublisher(idx, 'name', e.target.value)}
                     placeholder={t('systemEditor.publisherNamePlaceholder')}
+                    aria-label={t('systemEditor.publisherNamePlaceholder')}
                     style={{ flex: '1 1 140px', minWidth: 0 }}
                   />
                   <input
+                    id={`publisher-url-${idx}`}
                     type="text"
                     value={p.url}
                     onChange={(e) => setPublisher(idx, 'url', e.target.value)}
                     placeholder={t('systemEditor.publisherUrlPlaceholder')}
+                    aria-label={t('systemEditor.publisherUrlPlaceholder')}
                     style={{ flex: '1 1 180px', minWidth: 0 }}
                   />
                   <button
@@ -250,6 +259,7 @@ export default function SystemEditor({ system, onSave }) {
           {field(t('systemEditor.genre'), 'genre')}
           <div style={{ marginBottom: 12 }}>
             <label
+              htmlFor="system-is-explicit"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -259,6 +269,7 @@ export default function SystemEditor({ system, onSave }) {
               }}
             >
               <input
+                id="system-is-explicit"
                 type="checkbox"
                 checked={form.is_explicit}
                 onChange={(e) => setForm((f) => ({ ...f, is_explicit: e.target.checked }))}

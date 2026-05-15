@@ -148,7 +148,7 @@ export default function BookRow({ book, onOpen, onEdit, editing }) {
             </span>
           ) : (
             <>
-              {book.indexed && (
+              {book.indexed && book.index_error !== 'image-only' && (
                 <span
                   title={t('bookRow.indexedTitle')}
                   style={{
@@ -160,6 +160,21 @@ export default function BookRow({ book, onOpen, onEdit, editing }) {
                   }}
                 >
                   {t('bookRow.indexed')}
+                </span>
+              )}
+              {book.indexed && book.index_error === 'image-only' && (
+                <span
+                  title={t('bookRow.imageOnlyTitle')}
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--muted, #888)',
+                    background: 'rgba(128,128,128,0.1)',
+                    padding: '1px 6px',
+                    borderRadius: 8,
+                    border: '1px solid rgba(128,128,128,0.25)',
+                  }}
+                >
+                  {t('bookRow.imageOnly')}
                 </span>
               )}
               {book.index_failed && (

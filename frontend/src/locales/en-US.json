@@ -894,6 +894,8 @@
     "editBook": "Edit metadata",
     "indexed": "Indexed",
     "indexedTitle": "Full-text indexed",
+    "imageOnly": "Image Only",
+    "imageOnlyTitle": "This PDF contains only scanned images — no text layer to search",
     "indexFailed": "Index Failed",
     "indexFailedTitle": "Index failed",
     "indexFailedWithError": "Index failed: {{error}}",

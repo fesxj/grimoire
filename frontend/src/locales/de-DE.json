@@ -828,6 +828,8 @@
     "editBook": "Metadaten bearbeiten",
     "indexed": "Indiziert",
     "indexedTitle": "Volltext indiziert",
+    "imageOnly": null,
+    "imageOnlyTitle": null,
     "indexFailed": "Indizierung fehlgeschlagen",
     "indexFailedTitle": "Indizierung fehlgeschlagen",
     "indexFailedWithError": "Indizierung fehlgeschlagen: {{error}}",

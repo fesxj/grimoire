@@ -1,26 +1,20 @@
-"""Core book CRUD and file-serving endpoints."""
+"""Core book CRUD and file-serving endpoint handlers."""
+import glob
 import hashlib
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from ...config import SessionLocal, THUMB_DIR, _PAGE_CACHE_HEADERS
-from ...models import GameSystem, Book
-from ...auth import require_gm_or_admin, get_current_user, CurrentUser
-from ...indexer import slugify
+from ...auth import CurrentUser, get_current_user, require_gm_or_admin
+from ...config import _PAGE_CACHE_HEADERS, SessionLocal, THUMB_DIR
+
+from ...models import Book, GameSystem
 from ._helpers import _allow_explicit
 from ._schemas import BookUpdate
 
-router = APIRouter()
 
-
-@router.get(
-    "",
-    summary="List books",
-    description="Returns a paginated list of books. Filter by `system_id` or `category`.",
-)
 def list_books(
     system_id: Optional[str] = None,
     category: Optional[str] = None,
@@ -64,11 +58,6 @@ def list_books(
         db.close()
 
 
-@router.get(
-    "/{book_id}",
-    summary="Get a book",
-    description="Returns full metadata for a book including its associated game system.",
-)
 def get_book(book_id: str, current_user: CurrentUser = Depends(get_current_user)):
     db = SessionLocal()
     try:
@@ -108,11 +97,6 @@ def get_book(book_id: str, current_user: CurrentUser = Depends(get_current_user)
         db.close()
 
 
-@router.patch(
-    "/{book_id}",
-    summary="Update book metadata",
-    description="Updates editable fields on a book (title, authors, description, etc.). GM or admin role required.",
-)
 def update_book(book_id: str, data: BookUpdate, _: CurrentUser = Depends(require_gm_or_admin)):
     db = SessionLocal()
     try:
@@ -127,11 +111,6 @@ def update_book(book_id: str, data: BookUpdate, _: CurrentUser = Depends(require
         db.close()
 
 
-@router.get(
-    "/{book_id}/file",
-    summary="Download book file",
-    description="Streams the raw book file (PDF or other format). Accepts `?token=` for browser-embedded downloads.",
-)
 def serve_book_file(book_id: str):
     db = SessionLocal()
     try:
@@ -155,22 +134,16 @@ def serve_book_file(book_id: str):
         db.close()
 
 
-@router.get(
-    "/{book_id}/thumbnail",
-    summary="Book cover thumbnail",
-    description="Returns the pregenerated WebP cover thumbnail for a book. 404 if not yet generated.",
-)
 def serve_book_thumbnail(book_id: str):
     db = SessionLocal()
     try:
         book = db.query(Book).filter_by(id=book_id).first()
         if not book:
             raise HTTPException(404)
-        slug = slugify(book.title)
         fhash = hashlib.md5(book.filepath.encode()).hexdigest()[:8]
-        thumb_path = os.path.join(THUMB_DIR, "books", f"{slug}_{fhash}.webp")
-        if os.path.exists(thumb_path):
-            return FileResponse(thumb_path, media_type="image/webp", headers=_PAGE_CACHE_HEADERS)
+        matches = glob.glob(os.path.join(THUMB_DIR, "books", f"*_{fhash}.webp"))
+        if matches:
+            return FileResponse(matches[0], media_type="image/webp", headers=_PAGE_CACHE_HEADERS)
         raise HTTPException(404, "No thumbnail available")
     finally:
         db.close()

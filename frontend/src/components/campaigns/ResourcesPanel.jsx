@@ -321,6 +321,7 @@ function ResourcePicker({ campaignId, isGmCampaign, linkedIds, onAdd, onClose })
           }}
         />
         <input
+          id="resource-picker-search"
           ref={searchRef}
           value={query}
           onChange={(e) => handleQuery(e.target.value)}
@@ -341,6 +342,7 @@ function ResourcePicker({ campaignId, isGmCampaign, linkedIds, onAdd, onClose })
 
       {isGmCampaign && (
         <label
+          htmlFor="resource-share-default"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -351,7 +353,7 @@ function ResourcePicker({ campaignId, isGmCampaign, linkedIds, onAdd, onClose })
             marginBottom: 10,
           }}
         >
-          <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
+          <input id="resource-share-default" type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
           {t('resources.shareByDefault')}
         </label>
       )}

@@ -2,6 +2,9 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
+      - "release/v*"
   pull_request:
 
 jobs:
@@ -52,4 +55,4 @@ jobs:
         run: python -c "import backend.main"
 
       - name: Run tests
-        run: pytest tests/ -v
+        run: pytest backend/tests/ -v

@@ -1,19 +1,16 @@
-"""Schedule and availability endpoints for campaigns."""
+"""Schedule and availability endpoint handlers for campaigns."""
 
 import datetime
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import Depends, HTTPException
 
+from ...auth import CurrentUser, get_current_user
 from ...config import SessionLocal
-from ...models import CampaignSchedule, SessionAvailability, CampaignMember, User
-from ...auth import get_current_user, CurrentUser
-from ._helpers import get_campaign_or_404, assert_can_manage, can_view, compute_next_sessions
-from ._schemas import ScheduleUpsert, AvailabilityUpdate
-
-router = APIRouter()
+from ...models import CampaignMember, CampaignSchedule, SessionAvailability, User
+from ._helpers import assert_can_manage, can_view, compute_next_sessions, get_campaign_or_404
+from ._schemas import AvailabilityUpdate, ScheduleUpsert
 
 
-@router.get("/{campaign_id}/schedule", summary="Get campaign schedule and next sessions")
 def get_schedule(campaign_id: str, current_user: CurrentUser = Depends(get_current_user)):
     db = SessionLocal()
     try:
@@ -31,7 +28,6 @@ def get_schedule(campaign_id: str, current_user: CurrentUser = Depends(get_curre
         db.close()
 
 
-@router.put("/{campaign_id}/schedule", summary="Create or update campaign schedule")
 def upsert_schedule(
     campaign_id: str,
     data: ScheduleUpsert,
@@ -76,7 +72,6 @@ def upsert_schedule(
         db.close()
 
 
-@router.delete("/{campaign_id}/schedule", summary="Remove campaign schedule", status_code=204)
 def delete_schedule(campaign_id: str, current_user: CurrentUser = Depends(get_current_user)):
     db = SessionLocal()
     try:
@@ -90,7 +85,6 @@ def delete_schedule(campaign_id: str, current_user: CurrentUser = Depends(get_cu
         db.close()
 
 
-@router.get("/{campaign_id}/availability", summary="Get availability chart for upcoming sessions")
 def get_availability(campaign_id: str, current_user: CurrentUser = Depends(get_current_user)):
     db = SessionLocal()
     try:
@@ -155,9 +149,6 @@ def get_availability(campaign_id: str, current_user: CurrentUser = Depends(get_c
         db.close()
 
 
-@router.put(
-    "/{campaign_id}/availability/{session_date}", summary="Set availability for a session date"
-)
 def set_availability(
     campaign_id: str,
     session_date: str,
@@ -224,10 +215,6 @@ def set_availability(
         db.close()
 
 
-@router.put(
-    "/{campaign_id}/availability/{session_date}/cancel",
-    summary="GM: cancel or uncancel a session date",
-)
 def cancel_session_date(
     campaign_id: str,
     session_date: str,

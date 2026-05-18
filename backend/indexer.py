@@ -362,6 +362,8 @@ def scan_library(library_path: str, data_path: str, session: Session, on_progres
                             continue
                         needs_thumbnail = not existing.has_thumbnail
                         needs_page_count = ext == ".pdf" and existing.page_count == 0 and not existing.index_error
+                        if ext in IMAGE_EXTS and existing.page_count == 0:
+                            existing.page_count = 1
                         if not needs_thumbnail and not needs_page_count:
                             logger.debug(f"Already registered, skipping: {filename}")
                             continue
@@ -408,6 +410,8 @@ def scan_library(library_path: str, data_path: str, session: Session, on_progres
                             continue
                         needs_thumbnail = True
                         needs_page_count = ext == ".pdf"
+                        if ext in IMAGE_EXTS:
+                            book.page_count = 1
 
                     thumb_path = os.path.join(
                         thumb_dir,
@@ -796,16 +800,17 @@ def index_book_text(book: Book, data_path: str, session: Session, should_stop=No
     logger.info(f"Indexing: extracting text from '{book.filepath}'")
     pages = extract_text_from_pdf(book.filepath, should_stop=should_stop)
     if not pages:
-        logger.warning(f"No text extracted from '{book.filename}', marking as failed")
-        book.index_error = "No text extracted"
-        book.index_failed = True
-        logger.debug(f"DB: committing index_failed for '{book.filename}'")
+        logger.info(f"No text extracted from '{book.filename}' — image-only PDF, marking as indexed")
+        book.index_error = "image-only"
+        book.indexed = True
+        book.index_failed = False
+        logger.debug(f"DB: committing image-only indexed for '{book.filename}'")
         try:
-            _run_with_timeout(session.commit, _DB_TIMEOUT, f"commit index_failed '{book.filepath}'")
+            _run_with_timeout(session.commit, _DB_TIMEOUT, f"commit image-only indexed '{book.filepath}'")
         except TimeoutError as e:
-            logger.error(f"DB hang: {e} — rolling back index_failed for '{book.filename}'")
+            logger.error(f"DB hang: {e} — rolling back image-only indexed for '{book.filename}'")
             session.rollback()
-        return False
+        return True
 
     logger.info(f"Indexing: inserting {len(pages)} pages for '{book.filename}' into search index")
     for page_data in pages:

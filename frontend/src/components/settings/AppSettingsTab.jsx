@@ -63,6 +63,7 @@ function SidebarVisibilitySection() {
           {VISIBILITY_ITEMS.map(({ key, label }) => (
             <label
               key={key}
+              htmlFor={key}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -72,6 +73,7 @@ function SidebarVisibilitySection() {
               }}
             >
               <input
+                id={key}
                 type="checkbox"
                 checked={values[key]}
                 onChange={() => toggle(key)}
@@ -146,6 +148,7 @@ function StatsDisplaySection() {
           {STAT_ITEMS.map(({ key, label }) => (
             <label
               key={key}
+              htmlFor={key}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -155,6 +158,7 @@ function StatsDisplaySection() {
               }}
             >
               <input
+                id={key}
                 type="checkbox"
                 checked={values[key]}
                 onChange={() => toggle(key)}

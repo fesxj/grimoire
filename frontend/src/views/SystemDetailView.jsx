@@ -13,11 +13,13 @@ import {
   LuChevronDown,
   LuChevronRight,
   LuDownload,
+  LuHeart,
 } from 'react-icons/lu'
 import api from '../api'
 import DownloadArchiveModal from '../components/DownloadArchiveModal'
 
 import { useAuth } from '../context/AuthContext'
+import { useFavorites } from '../context/FavoritesContext'
 import Spinner from '../components/Spinner'
 import Tag from '../components/Tag'
 import BookRow from '../components/system/BookRow'
@@ -41,6 +43,7 @@ export default function SystemDetailView() {
   const { systemId } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { isFavorite } = useFavorites()
   const isEditor = user?.role === 'admin' || user?.role === 'gm'
   const [system, setSystem] = useState(null)
   const [editing, setEditing] = useState(false)
@@ -56,6 +59,7 @@ export default function SystemDetailView() {
   const [selectedTags, setSelectedTags] = useState(new Set())
   const [showAllTags, setShowAllTags] = useState(false)
   const [bookSort, setBookSort] = useState('title')
+  const [favOnly, setFavOnly] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState(null)
   const [searching, setSearching] = useState(false)
@@ -125,7 +129,8 @@ export default function SystemDetailView() {
   ;(system.books || [])
     .filter(
       (book) =>
-        selectedTags.size === 0 || [...selectedTags].every((tag) => (book.tags || []).includes(tag))
+        (selectedTags.size === 0 || [...selectedTags].every((tag) => (book.tags || []).includes(tag))) &&
+        (!favOnly || isFavorite('book', book.id))
     )
     .forEach((book) => {
       const cat = book.category || 'core'
@@ -274,7 +279,9 @@ export default function SystemDetailView() {
                 }}
               />
               <input
+                id="system-detail-search"
                 type="text"
+                aria-label={t('systemDetail.searchWithin', { name: system.name })}
                 value={searchQuery}
                 onChange={handleSearchInput}
                 placeholder={t('systemDetail.searchWithin', { name: system.name })}
@@ -483,7 +490,7 @@ export default function SystemDetailView() {
 
       {/* Sort bar */}
       {!searchResults && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13, color: 'var(--text-muted)', flexShrink: 0 }}>
             {t('common.sort')}
           </span>
@@ -504,6 +511,29 @@ export default function SystemDetailView() {
               {label}
             </button>
           ))}
+          <div style={{ marginLeft: 'auto' }}>
+            <button
+              onClick={() => setFavOnly((v) => !v)}
+              aria-pressed={favOnly}
+              title={t('favorites.onlyFavorites')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '3px 10px',
+                borderRadius: 6,
+                border: '1px solid var(--border)',
+                background: favOnly ? 'rgba(180,120,60,0.15)' : 'var(--bg-card)',
+                color: favOnly ? 'var(--gold)' : 'var(--text-muted)',
+                fontSize: 12,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              <LuHeart size={12} fill={favOnly ? 'var(--gold)' : 'none'} />
+              {t('favorites.onlyFavorites')}
+            </button>
+          </div>
         </div>
       )}
 
@@ -708,8 +738,8 @@ export default function SystemDetailView() {
                     }
 
                     const sortedFolderKeys = Object.keys(folderMap).sort((a, b) => {
-                      if (a === '') return 1
-                      if (b === '') return -1
+                      if (a === '') return -1
+                      if (b === '') return 1
                       return a.localeCompare(b)
                     })
                     return (
@@ -783,7 +813,7 @@ export default function SystemDetailView() {
       {!searchResults && allCatKeys.length === 0 && (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}>
           <LuFolderOpen size={48} style={{ marginBottom: 16, opacity: 0.4 }} />
-          <p>{t('systemDetail.noBooks')}</p>
+          <p>{favOnly ? t('favorites.noFavoritesInView') : t('systemDetail.noBooks')}</p>
         </div>
       )}
 

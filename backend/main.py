@@ -1,36 +1,38 @@
 """Grimoire — Self-hosted TTRPG Library Manager."""
-import os
 import fcntl
+import os
 import threading
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, APIRouter, Depends, Request
-from fastapi.staticfiles import StaticFiles
+from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
-from .config import DATA_PATH, LIBRARY_PATH, SessionLocal, VERSION, logger, OPDS_ENABLED
-from .seed_users import seed_users
-from .routers import maps as maps_router
-from .routers import tokens as tokens_router
+from . import scheduler, session_creator
 from .auth import get_current_user
-from .routers import auth as auth_router
-from .routers import users as users_router
-from .routers import systems as systems_router
-from .routers import books as books_router
-from .routers import library as library_router
-from .routers import search as search_router
-from .routers import favorites as favorites_router
-from .routers import bookmarks as bookmarks_router
-from .routers import maintenance as maintenance_router
-from .routers import settings as settings_router
-from .routers import campaigns as campaigns_router
-from .routers import logs as logs_router
-from .routers import downloads as downloads_router
-from .routers import export as export_router
+from .config import DATA_PATH, LIBRARY_PATH, OPDS_ENABLED, SessionLocal, VERSION, logger
+from .routers import (
+    auth as auth_router,
+    bookmarks as bookmarks_router,
+    books as books_router,
+    campaigns as campaigns_router,
+    downloads as downloads_router,
+    export as export_router,
+    favorites as favorites_router,
+    library as library_router,
+    logs as logs_router,
+    maintenance as maintenance_router,
+    maps as maps_router,
+    oidc as oidc_router,
+    opds as opds_router,
+    search as search_router,
+    settings as settings_router,
+    systems as systems_router,
+    tokens as tokens_router,
+    users as users_router,
+)
 from .routers.library import run_rescan_sync
-from .routers import opds as opds_router
-from . import scheduler
-from . import session_creator
+from .seed_users import seed_users
 
 _DESCRIPTION = """
 **Grimoire** is a self-hosted TTRPG library manager. All endpoints except
@@ -131,28 +133,32 @@ _assets_dir = os.path.join(FRONTEND_DIR, "assets")
 if os.path.isdir(_assets_dir):
     app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
 
+# --- Public (unauthenticated) routes -----------------------------------------
 app.include_router(auth_router.public_router)
+app.include_router(oidc_router.public_router)
 app.include_router(library_router.public_router)
 if OPDS_ENABLED:
     app.include_router(opds_router.router)
 
+# --- Authenticated /api/* routes ---------------------------------------------
 api = APIRouter(prefix="/api", dependencies=[Depends(get_current_user)])
 api.include_router(auth_router.router)
+api.include_router(oidc_router.router)
 api.include_router(users_router.router)
 api.include_router(systems_router.router)
 api.include_router(books_router.router)
-api.include_router(library_router.router)
-api.include_router(search_router.router)
 api.include_router(maps_router.router)
 api.include_router(tokens_router.router)
+api.include_router(library_router.router)
+api.include_router(search_router.router)
+api.include_router(campaigns_router.router)
 api.include_router(favorites_router.router)
 api.include_router(bookmarks_router.router)
-api.include_router(maintenance_router.router)
-api.include_router(settings_router.router)
-api.include_router(campaigns_router.router)
-api.include_router(logs_router.router)
 api.include_router(downloads_router.router)
 api.include_router(export_router.router)
+api.include_router(settings_router.router)
+api.include_router(maintenance_router.router)
+api.include_router(logs_router.router)
 app.include_router(api)
 
 

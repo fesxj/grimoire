@@ -59,11 +59,13 @@ export function DisplayNameSection() {
       >
         <div style={{ flex: 1, minWidth: 180 }}>
           <label
+            htmlFor="display-name"
             style={{ display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 5 }}
           >
             {t('userSettings.displayName.label')}
           </label>
           <input
+            id="display-name"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={user?.username}
@@ -91,6 +93,102 @@ export function DisplayNameSection() {
         >
           {saving && <Spinner size={13} />}
           {saving ? t('userSettings.displayName.saving') : t('userSettings.displayName.save')}
+        </button>
+      </form>
+      {error && <div style={{ fontSize: 13, color: '#e07070', marginTop: 8 }}>{error}</div>}
+    </div>
+  )
+}
+
+export function EmailSection() {
+  const { t } = useTranslation()
+  const { user, refreshUser } = useAuth()
+  const [value, setValue] = useState(user?.email ?? '')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState(null)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError(null)
+    setSaving(true)
+    try {
+      await api.patch('/users/me/preferences', { email: value.trim() })
+      await refreshUser()
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (err) {
+      setError(err?.message || t('userSettings.email.failed'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div>
+      <h3
+        style={{
+          fontSize: 18,
+          fontWeight: 600,
+          marginBottom: 6,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+        }}
+      >
+        {t('userSettings.email.title')}
+        {saved && <LuCircleCheck size={16} style={{ color: 'var(--green)' }} />}
+      </h3>
+      <p style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 20, lineHeight: 1.6 }}>
+        {t('userSettings.email.description')}
+      </p>
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          display: 'flex',
+          gap: 10,
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+          maxWidth: 460,
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <label
+            htmlFor="user-email"
+            style={{ display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 5 }}
+          >
+            {t('userSettings.email.label')}
+          </label>
+          <input
+            id="user-email"
+            type="email"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder={t('userSettings.email.placeholder')}
+            maxLength={254}
+            style={{ width: '100%', fontSize: 14, padding: '8px 12px', boxSizing: 'border-box' }}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={saving}
+          style={{
+            padding: '8px 18px',
+            borderRadius: 6,
+            fontSize: 14,
+            fontWeight: 500,
+            background: 'var(--gold-dim)',
+            border: 'none',
+            color: 'var(--bg-deep)',
+            cursor: saving ? 'default' : 'pointer',
+            opacity: saving ? 0.6 : 1,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          {saving && <Spinner size={13} />}
+          {saving ? t('common.saving') : t('common.save')}
         </button>
       </form>
       {error && <div style={{ fontSize: 13, color: '#e07070', marginTop: 8 }}>{error}</div>}
@@ -136,6 +234,7 @@ export function ExplicitContentSection() {
         {t('userSettings.contentPreferences.description')}
       </p>
       <label
+        htmlFor="explicit-content-allowed"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -145,6 +244,7 @@ export function ExplicitContentSection() {
         }}
       >
         <input
+          id="explicit-content-allowed"
           type="checkbox"
           checked={allowed}
           onChange={toggle}
@@ -197,18 +297,21 @@ export function ChangePasswordSection() {
 
   const fields = [
     {
+      id: 'change-password-current',
       label: t('userSettings.changePassword.currentPassword'),
       value: current,
       onChange: setCurrent,
       complete: 'current-password',
     },
     {
+      id: 'change-password-new',
       label: t('userSettings.changePassword.newPassword'),
       value: next,
       onChange: setNext,
       complete: 'new-password',
     },
     {
+      id: 'change-password-confirm',
       label: t('userSettings.changePassword.confirmNewPassword'),
       value: confirm,
       onChange: setConfirm,
@@ -229,14 +332,16 @@ export function ChangePasswordSection() {
         onSubmit={handleSubmit}
         style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 360 }}
       >
-        {fields.map(({ label, value, onChange, complete }) => (
+        {fields.map(({ label, value, onChange, complete, id }) => (
           <div key={label}>
             <label
+              htmlFor={id}
               style={{ display: 'block', fontSize: 13, color: 'var(--text-dim)', marginBottom: 5 }}
             >
               {label}
             </label>
             <input
+              id={id}
               type="password"
               value={value}
               onChange={(e) => onChange(e.target.value)}
@@ -379,6 +484,7 @@ export function OPDSSection() {
             {/* Feed URL display */}
             <div>
               <label
+                htmlFor="opds-feed-url"
                 style={{
                   display: 'block',
                   fontSize: 13,
@@ -390,6 +496,7 @@ export function OPDSSection() {
               </label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <input
+                  id="opds-feed-url"
                   readOnly
                   value={status.feed_url || ''}
                   style={{

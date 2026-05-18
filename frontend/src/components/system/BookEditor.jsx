@@ -25,12 +25,14 @@ export default function BookEditor({ book, onSave, onClose, allTags = [] }) {
   const field = (label, key, opts = {}) => (
     <div style={{ marginBottom: 10 }}>
       <label
+        htmlFor={`book-field-${key}`}
         style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}
       >
         {label}
       </label>
       {opts.textarea ? (
         <textarea
+          id={`book-field-${key}`}
           value={form[key]}
           onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
           rows={3}
@@ -38,6 +40,7 @@ export default function BookEditor({ book, onSave, onClose, allTags = [] }) {
         />
       ) : (
         <input
+          id={`book-field-${key}`}
           type="text"
           value={form[key]}
           onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
@@ -104,6 +107,7 @@ export default function BookEditor({ book, onSave, onClose, allTags = [] }) {
 
       <div style={{ marginBottom: 12 }}>
         <label
+          htmlFor="book-is-explicit"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -113,6 +117,7 @@ export default function BookEditor({ book, onSave, onClose, allTags = [] }) {
           }}
         >
           <input
+            id="book-is-explicit"
             type="checkbox"
             checked={form.is_explicit}
             onChange={(e) => setForm((f) => ({ ...f, is_explicit: e.target.checked }))}

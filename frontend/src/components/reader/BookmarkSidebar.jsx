@@ -144,6 +144,8 @@ export default function BookmarkSidebar({ bookId, currentPage, onGoToPage, onClo
                   {isEditing ? (
                     <div onClick={(e) => e.stopPropagation()}>
                       <input
+                        id={`bookmark-label-${bm.id}`}
+                        aria-label={t('bookmark.editBookmark')}
                         autoFocus
                         value={editLabel}
                         onChange={(e) => setEditLabel(e.target.value)}
@@ -165,6 +167,8 @@ export default function BookmarkSidebar({ bookId, currentPage, onGoToPage, onClo
                         }}
                       />
                       <textarea
+                        id={`bookmark-notes-${bm.id}`}
+                        aria-label={t('bookmark.notesPlaceholder')}
                         value={editNotes}
                         onChange={(e) => setEditNotes(e.target.value)}
                         onKeyDown={(e) => {

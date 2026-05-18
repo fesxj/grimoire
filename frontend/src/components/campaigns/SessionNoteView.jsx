@@ -61,6 +61,7 @@ function NoteEditor({ label, value, onChange, placeholder, readOnly, lastSaved }
         )}
       </div>
       <textarea
+        aria-label={label || placeholder}
         value={value}
         onChange={onChange ? (e) => onChange(e.target.value) : undefined}
         placeholder={placeholder}
@@ -199,6 +200,8 @@ export default function SessionNoteView({ campaign, sessionId, isOwner, userId, 
         {editingTitle ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <input
+              id="session-title-edit"
+              aria-label={t('sessionNote.editSessionTitle')}
               value={titleValue}
               onChange={(e) => setTitleValue(e.target.value)}
               onKeyDown={(e) => {

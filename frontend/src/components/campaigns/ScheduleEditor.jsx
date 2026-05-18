@@ -25,6 +25,7 @@ function TimePicker({ value, onChange }) {
   return (
     <div>
       <label
+        htmlFor="schedule-time-enabled"
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -36,6 +37,7 @@ function TimePicker({ value, onChange }) {
         }}
       >
         <input
+          id="schedule-time-enabled"
           type="checkbox"
           checked={enabled}
           onChange={(e) => {
@@ -48,8 +50,10 @@ function TimePicker({ value, onChange }) {
       {enabled && (
         <>
           <input
+            id="schedule-session-time"
             type="time"
             list="schedule-time-options"
+            aria-label={t('schedule.setSessionTime', { tz: USER_TZ })}
             value={utcToLocalInputTime(value)}
             onChange={(e) => onChange(localInputTimeToUtc(e.target.value))}
             style={{ ...inputStyle, colorScheme: 'dark', accentColor: 'var(--gold)' }}
@@ -271,7 +275,9 @@ export default function ScheduleEditor({ campaign, existing, onSaved, onDeleted 
             {t('schedule.referenceDate')}
           </div>
           <input
+            id="schedule-biweekly-ref"
             type="date"
+            aria-label={t('schedule.referenceDate')}
             value={biweeklyRef}
             onChange={(e) => setBiweeklyRef(e.target.value)}
             style={inputStyle}
@@ -286,7 +292,9 @@ export default function ScheduleEditor({ campaign, existing, onSaved, onDeleted 
           </div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <input
+              id="schedule-custom-date"
               type="date"
+              aria-label={t('schedule.customDates')}
               value={newCustomDate}
               onChange={(e) => setNewCustomDate(e.target.value)}
               style={inputStyle}

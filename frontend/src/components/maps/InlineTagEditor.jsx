@@ -101,7 +101,9 @@ export default function InlineTagEditor({ tags, onSave, onCancel, suggestions = 
       ))}
       <div style={{ position: 'relative' }}>
         <input
+          id="inline-tag-input"
           ref={inputRef}
+          aria-label={t('inlineTagEditor.placeholder')}
           value={input}
           onChange={(e) => {
             setInput(e.target.value)

@@ -340,6 +340,7 @@ export default function LogsTab() {
             }}
           />
           <input
+            id="logs-search"
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}

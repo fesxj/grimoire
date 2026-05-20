@@ -96,6 +96,57 @@ def init_db(db_path: str):
         except Exception:
             pass  # Column already exists
 
+        try:
+            cols = conn.execute(text("PRAGMA table_info(users)")).fetchall()
+            # col tuple: (cid, name, type, notnull, dflt_value, pk)
+            hp = next((c for c in cols if c[1] == "hashed_password"), None)
+            if hp and hp[3]:  # notnull == 1
+                conn.execute(text("PRAGMA foreign_keys=OFF"))
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE users_new (
+                            id VARCHAR(36) PRIMARY KEY,
+                            username VARCHAR(100) NOT NULL UNIQUE,
+                            display_name VARCHAR(100),
+                            email VARCHAR(254),
+                            hashed_password VARCHAR(255),
+                            role VARCHAR(20),
+                            allow_explicit BOOLEAN,
+                            opds_token VARCHAR(64),
+                            oidc_subject VARCHAR(255),
+                            created_at DATETIME
+                        )
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO users_new
+                            SELECT id, username, display_name, email, hashed_password,
+                                   role, allow_explicit, opds_token, oidc_subject, created_at
+                            FROM users
+                        """
+                    )
+                )
+                conn.execute(text("DROP TABLE users"))
+                conn.execute(text("ALTER TABLE users_new RENAME TO users"))
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users(email) WHERE email IS NOT NULL"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_oidc_subject ON users(oidc_subject) WHERE oidc_subject IS NOT NULL"
+                    )
+                )
+                conn.execute(text("PRAGMA foreign_keys=ON"))
+                conn.commit()
+        except Exception:
+            pass
+
         # Normalize all stored tags to lowercase, deduplicating within each row.
         _normalize_tags_in_db(conn)
 

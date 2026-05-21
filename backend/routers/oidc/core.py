@@ -98,9 +98,13 @@ def oidc_login(return_to: Optional[str] = Query(None)):
 
     scopes = ["openid", "email", "profile"]
     if eff["oidc_groups_claim"]:
-        # Some IdPs (Keycloak, Authentik) expose groups via a dedicated scope;
-        # asking for it is harmless if unsupported.
+        # Request both the generic "groups" scope and the configured claim name
+        # as a scope — IdPs like Authentik map claims to scopes by name.
         scopes.append("groups")
+        if eff["oidc_groups_claim"] not in scopes:
+            scopes.append(eff["oidc_groups_claim"])
+    if eff["oidc_permissions_claim"] and eff["oidc_permissions_claim"] not in scopes:
+        scopes.append(eff["oidc_permissions_claim"])
 
     params = {
         "response_type": "code",

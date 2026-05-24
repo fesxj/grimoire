@@ -580,6 +580,12 @@ The live API is self-documented via OpenAPI. With the server running:
 
 ---
 
+## FAQ
+
+Common questions and troubleshooting tips are in [docs/faq.md](docs/faq.md).
+
+---
+
 ## Contributing
 
 Grimoire is open source and contributions are welcome — bug reports, feature ideas, docs, and code.

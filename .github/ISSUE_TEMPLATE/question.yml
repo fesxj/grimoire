@@ -5,7 +5,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        Happy to help! Before opening an issue, it's worth a quick check of the [README](../../blob/main/README.md) — setup steps, environment variables, and common configurations are all documented there.
+        Happy to help! Before opening an issue, please check:
+        - [FAQ](../../blob/main/docs/faq.md) — password resets, library mount issues, OIDC setup, and other common questions
+        - [README](../../blob/main/README.md) — setup steps, environment variables, and common configurations
 
   - type: textarea
     id: question

@@ -216,3 +216,41 @@ describe('SearchView', () => {
     expect(api.get).not.toHaveBeenCalled()
   })
 })
+
+describe('SearchView — URL query param persistence', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('pre-fills the input from ?q= on mount', () => {
+    render(
+      <MemoryRouter initialEntries={['/search?q=fireball']}>
+        <SearchView />
+      </MemoryRouter>
+    )
+    expect(screen.getByRole('textbox').value).toBe('fireball')
+  })
+
+  it('runs the search immediately on mount when ?q= is present', async () => {
+    api.get.mockResolvedValue(makeResponse([makeBookResult({ title: 'Spell Guide' })]))
+    render(
+      <MemoryRouter initialEntries={['/search?q=fireball']}>
+        <SearchView />
+      </MemoryRouter>
+    )
+    await waitFor(() => expect(screen.getByText('Spell Guide')).toBeInTheDocument())
+    expect(api.get).toHaveBeenCalledWith(expect.stringContaining('q=fireball'))
+  })
+
+  it('does not run a search on mount when ?q= is absent', () => {
+    renderView()
+    expect(api.get).not.toHaveBeenCalled()
+  })
+
+  it('does not run a search on mount when ?q= is a single character', () => {
+    render(
+      <MemoryRouter initialEntries={['/search?q=x']}>
+        <SearchView />
+      </MemoryRouter>
+    )
+    expect(api.get).not.toHaveBeenCalled()
+  })
+})

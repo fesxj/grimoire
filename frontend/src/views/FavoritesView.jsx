@@ -12,7 +12,7 @@ function BookFavorite({ item }) {
   const CatIcon = CATEGORY_ICONS[item.category] || LuFileText
   return (
     <div
-      onClick={() => navigate(`/library/book/${item.item_id}`)}
+      onClick={() => navigate(`/library/book/${item.item_id}`, { state: { from: window.location.pathname } })}
       style={{
         display: 'flex',
         alignItems: 'center',

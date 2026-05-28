@@ -60,7 +60,7 @@ export default function SystemDetailView() {
   const [showAllTags, setShowAllTags] = useState(false)
   const [bookSort, setBookSort] = useState('title')
   const [favOnly, setFavOnly] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
+  const [searchQuery, setSearchQuery] = useSessionState(`grimoire:system:${systemId}:search-query`, '')
   const [searchResults, setSearchResults] = useState(null)
   const [searching, setSearching] = useState(false)
   const searchTimer = useRef(null)
@@ -87,6 +87,11 @@ export default function SystemDetailView() {
     },
     [systemId]
   )
+
+  // Re-run the search on mount if a query was persisted from a previous visit.
+  useEffect(() => {
+    if (searchQuery && searchQuery.length >= 2) doSearch(searchQuery)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearchInput = (e) => {
     const v = e.target.value
@@ -551,7 +556,7 @@ export default function SystemDetailView() {
           {searchResults.results.map((r, i) => (
             <div
               key={i}
-              onClick={() => navigate(`/library/book/${r.id}?page=${r.page_number}`)}
+              onClick={() => navigate(`/library/book/${r.id}?page=${r.page_number}`, { state: { from: window.location.pathname } })}
               style={{
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border)',
@@ -711,7 +716,7 @@ export default function SystemDetailView() {
                             <div key={book.id}>
                               <BookRow
                                 book={book}
-                                onOpen={() => navigate(`/library/book/${book.id}`)}
+                                onOpen={() => navigate(`/library/book/${book.id}`, { state: { from: window.location.pathname } })}
                                 onEdit={
                                   isEditor
                                     ? () =>
@@ -760,7 +765,7 @@ export default function SystemDetailView() {
                                 <div key={book.id}>
                                   <BookRow
                                     book={book}
-                                    onOpen={() => navigate(`/library/book/${book.id}`)}
+                                    onOpen={() => navigate(`/library/book/${book.id}`, { state: { from: window.location.pathname } })}
                                     onEdit={
                                       isEditor
                                         ? () =>
@@ -796,7 +801,7 @@ export default function SystemDetailView() {
                               onToggle={toggleSubfolder}
                               editingBookId={editingBookId}
                               setEditingBookId={setEditingBookId}
-                              onOpenBook={(book) => navigate(`/library/book/${book.id}`)}
+                              onOpenBook={(book) => navigate(`/library/book/${book.id}`, { state: { from: window.location.pathname } })}
                               isEditor={isEditor}
                               onSaveBook={saveBook}
                               onDownload={setDownloadModal}

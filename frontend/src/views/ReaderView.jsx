@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
   LuArrowLeft,
@@ -51,7 +51,11 @@ export default function ReaderView() {
   const { t } = useTranslation()
   const { bookId } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
+  // Capture the referring path on mount so the back button always exits the reader in one click,
+  // regardless of how many jump-navigation history entries were pushed (ToC, bookmarks, search).
+  const backPathRef = useRef(location.state?.from ?? null)
 
   const MODES = [
     { key: 'page', Icon: LuFileText, label: t('reader.page') },
@@ -316,7 +320,7 @@ export default function ReaderView() {
     )
 
   if (book.mime_type?.startsWith('image/')) {
-    return <ImageBookViewer book={book} bookId={bookId} />
+    return <ImageBookViewer book={book} bookId={bookId} backPath={backPathRef.current} />
   }
 
   const rightPage = currentPage + 1
@@ -342,7 +346,7 @@ export default function ReaderView() {
         }}
       >
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => (backPathRef.current ? navigate(backPathRef.current) : navigate(-1))}
           aria-label={t('reader.back')}
           style={{
             background: 'none',
@@ -920,7 +924,7 @@ function SinglePage({
   )
 }
 
-function ImageBookViewer({ book, bookId }) {
+function ImageBookViewer({ book, bookId, backPath }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { isFavorite, toggleFavorite } = useFavorites()
@@ -939,7 +943,7 @@ function ImageBookViewer({ book, bookId }) {
         }}
       >
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => (backPath ? navigate(backPath) : navigate(-1))}
           aria-label={t('reader.back')}
           style={{
             background: 'none',

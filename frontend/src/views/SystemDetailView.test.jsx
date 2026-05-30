@@ -304,3 +304,77 @@ describe('SystemDetailView — subfolder grouping', () => {
     })
   })
 })
+
+describe('SystemDetailView — in-system search persistence', () => {
+  const SESSION_KEY = 'grimoire:system:system-1:search-query'
+
+  function setupSearchMock(resultTitle = 'Spell Compendium') {
+    api.get.mockImplementation((url) => {
+      if (url.includes('/search')) {
+        return Promise.resolve({
+          query: 'fireball',
+          total: 1,
+          results: [
+            {
+              id: 'b1',
+              title: resultTitle,
+              game_system: 'Test System',
+              category: 'core',
+              page_number: 7,
+              snippet: 'A <mark>fireball</mark> spell.',
+            },
+          ],
+          maps: [],
+          tokens: [],
+        })
+      }
+      return Promise.resolve(makeSystem([makeBook({ title: 'PHB' })]))
+    })
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockIsFavorite.mockReturnValue(false)
+    sessionStorage.clear()
+  })
+
+  it('persists the search query to sessionStorage as the user types', async () => {
+    setupSearchMock()
+    renderView()
+    await waitFor(() => screen.getByLabelText(/search within/i))
+
+    await userEvent.type(screen.getByLabelText(/search within/i), 'fi')
+
+    await waitFor(() =>
+      expect(sessionStorage.getItem(SESSION_KEY)).toBe(JSON.stringify('fi'))
+    )
+  })
+
+  it('re-runs the search on mount when a query is stored in sessionStorage', async () => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify('fireball'))
+    setupSearchMock('Spell Compendium')
+    renderView()
+
+    await waitFor(() => expect(screen.getByText('Spell Compendium')).toBeInTheDocument())
+    expect(api.get).toHaveBeenCalledWith(expect.stringContaining('q=fireball'))
+  })
+
+  it('pre-fills the search input from sessionStorage on mount', async () => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify('fireball'))
+    setupSearchMock()
+    renderView()
+
+    await waitFor(() => screen.getByLabelText(/search within/i))
+    expect(screen.getByLabelText(/search within/i).value).toBe('fireball')
+  })
+
+  it('does not run a search on mount when the stored query is too short', async () => {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify('x'))
+    api.get.mockResolvedValue(makeSystem([makeBook({ title: 'PHB' })]))
+    renderView()
+
+    await waitFor(() => screen.getByText('PHB'))
+    const searchCalls = api.get.mock.calls.filter(([url]) => url.includes('/search'))
+    expect(searchCalls).toHaveLength(0)
+  })
+})

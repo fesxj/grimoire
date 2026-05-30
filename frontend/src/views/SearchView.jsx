@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { LuSearch, LuMap, LuUser, LuBookOpen, LuChevronDown, LuChevronRight } from 'react-icons/lu'
 import api from '../api'
@@ -8,7 +8,8 @@ import Spinner from '../components/Spinner'
 export default function SearchView() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const [query, setQuery] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '')
   const [results, setResults] = useState(null)
   const [searching, setSearching] = useState(false)
   const [collapsed, setCollapsed] = useState({})
@@ -34,9 +35,16 @@ export default function SearchView() {
       .catch(() => setSearching(false))
   }, [])
 
+  // Run the search immediately on mount if the URL already has a query (e.g. back navigation).
+  useEffect(() => {
+    const initial = searchParams.get('q')
+    if (initial && initial.length >= 2) doSearch(initial)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleInput = (e) => {
     const v = e.target.value
     setQuery(v)
+    setSearchParams(v ? { q: v } : {}, { replace: true })
     clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => doSearch(v), 350)
   }
@@ -198,7 +206,7 @@ export default function SearchView() {
                       group={group}
                       collapsed={collapsed}
                       onToggle={toggleSection}
-                      onNavigate={(page) => navigate(`/library/book/${group.id}?page=${page}`)}
+                      onNavigate={(page) => navigate(`/library/book/${group.id}?page=${page}`, { state: { from: window.location.pathname + window.location.search } })}
                       t={t}
                     />
                   ))}

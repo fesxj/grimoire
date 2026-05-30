@@ -42,7 +42,9 @@ function ResourceRow({ resource, isOwner, isGmCampaign, onRemove, onToggleShare 
     : null
 
   const handleNav = () =>
-    navigate(RESOURCE_NAV[resource.resource_type]?.(resource.resource_id) ?? '/')
+    navigate(RESOURCE_NAV[resource.resource_type]?.(resource.resource_id) ?? '/', {
+      state: { from: window.location.pathname },
+    })
 
   return (
     <div

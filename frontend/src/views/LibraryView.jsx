@@ -262,7 +262,7 @@ export default function LibraryView() {
               return (
                 <div
                   key={book.id}
-                  onClick={() => navigate(`/library/book/${book.id}?page=${lastPage}`)}
+                  onClick={() => navigate(`/library/book/${book.id}?page=${lastPage}`, { state: { from: window.location.pathname } })}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

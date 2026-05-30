@@ -24,13 +24,15 @@ vi.mock('../components/campaigns/AddToCampaignButton', () => ({
   default: () => null,
 }))
 
-// Capture setSearchParams calls so we can assert replace vs push behaviour.
+// Capture setSearchParams and navigate calls so we can assert behaviour.
 const mockSetSearchParams = vi.fn()
+const mockNavigate = vi.fn()
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,
     useSearchParams: () => [new URLSearchParams(), mockSetSearchParams],
+    useNavigate: () => mockNavigate,
   }
 })
 
@@ -66,9 +68,12 @@ function setupApiMocks() {
   })
 }
 
-function renderReader(bookId = 'book-1') {
+function renderReader(bookId = 'book-1', { locationState } = {}) {
+  const entry = locationState
+    ? { pathname: `/library/book/${bookId}`, state: locationState }
+    : `/library/book/${bookId}`
   return render(
-    <MemoryRouter initialEntries={[`/library/book/${bookId}`]}>
+    <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route path="/library/book/:bookId" element={<ReaderView key={bookId} />} />
       </Routes>
@@ -189,5 +194,33 @@ describe('ReaderView — jump navigation history behaviour', () => {
     await userEvent.click(screen.getByLabelText('Next page'))
     await waitFor(() => expect(mockSetSearchParams).toHaveBeenCalled())
     expect(lastReplaceOption()).toBe(true)
+  })
+})
+
+describe('ReaderView — back button navigation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setupApiMocks()
+    vi.stubGlobal('requestAnimationFrame', (cb) => { cb(); return 0 })
+    vi.stubGlobal('cancelAnimationFrame', () => {})
+  })
+
+  it('navigates to location.state.from when present', async () => {
+    renderReader('book-1', { locationState: { from: '/library/system/system-1' } })
+    await waitFor(() => screen.getByText('Test Book'))
+
+    await userEvent.click(screen.getByLabelText('Back'))
+
+    expect(mockNavigate).toHaveBeenCalledWith('/library/system/system-1')
+    expect(mockNavigate).not.toHaveBeenCalledWith(-1)
+  })
+
+  it('falls back to navigate(-1) when no location.state.from', async () => {
+    renderReader('book-1')
+    await waitFor(() => screen.getByText('Test Book'))
+
+    await userEvent.click(screen.getByLabelText('Back'))
+
+    expect(mockNavigate).toHaveBeenCalledWith(-1)
   })
 })

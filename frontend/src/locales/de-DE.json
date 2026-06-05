@@ -152,7 +152,10 @@
     "shortcutBookmarks": "Lesezeichen",
     "shortcutSearch": "Suche",
     "shortcutHelp": "Diese Hilfe",
-    "shortcutClose": "Panels schließen"
+    "shortcutClose": "Panels schließen",
+    "spreadCover": null,
+    "spreadIncludeCover": null,
+    "spreadExcludeCover": null
   },
   "search": {
     "title": "Bibliothek durchsuchen",

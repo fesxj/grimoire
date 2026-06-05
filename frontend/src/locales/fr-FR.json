@@ -157,7 +157,10 @@
     "shortcutBookmarks": "Signets",
     "shortcutSearch": "Rechercher",
     "shortcutHelp": "Cette aide",
-    "shortcutClose": "Fermer les panneaux"
+    "shortcutClose": "Fermer les panneaux",
+    "spreadCover": "Couverture",
+    "spreadIncludeCover": "Inclure la couverture dans la double page (pages 1-2, 3-4…)",
+    "spreadExcludeCover": "Exclure la couverture de la double page (pages 2-3, 4-5…)"
   },
   "search": {
     "title": "Rechercher dans votre bibliothèque",

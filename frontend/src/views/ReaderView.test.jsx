@@ -197,6 +197,35 @@ describe('ReaderView — jump navigation history behaviour', () => {
   })
 })
 
+describe('ReaderView — spread mode (integration)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setupApiMocks()
+    vi.stubGlobal('requestAnimationFrame', (cb) => { cb(); return 0 })
+    vi.stubGlobal('cancelAnimationFrame', () => {})
+    localStorage.clear()
+  })
+
+  it('persists spreadOffset to localStorage when Cover is toggled', async () => {
+    localStorage.setItem('grimoire:book:book-1', JSON.stringify({ mode: 'spread' }))
+    renderReader()
+    await waitFor(() => screen.getByText('Test Book'))
+
+    await userEvent.click(screen.getByText('Cover'))
+    expect(JSON.parse(localStorage.getItem('grimoire:book:book-1')).spreadOffset).toBe(1)
+
+    await userEvent.click(screen.getByText('Cover'))
+    expect(JSON.parse(localStorage.getItem('grimoire:book:book-1')).spreadOffset).toBe(0)
+  })
+
+  it('restores spreadOffset from localStorage on mount', async () => {
+    localStorage.setItem('grimoire:book:book-1', JSON.stringify({ mode: 'spread', spreadOffset: 1 }))
+    renderReader()
+    await waitFor(() => screen.getByText('Test Book'))
+    expect(screen.getByTitle(/Exclude cover from spread/)).toBeInTheDocument()
+  })
+})
+
 describe('ReaderView — back button navigation', () => {
   beforeEach(() => {
     vi.clearAllMocks()

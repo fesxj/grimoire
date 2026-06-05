@@ -1,21 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import {
-  LuArrowLeft,
-  LuChevronLeft,
-  LuChevronRight,
-  LuDownload,
-  LuFileText,
-  LuColumns2,
-  LuFile,
-  LuSearch,
-  LuList,
-  LuBookmark,
-  LuBookmarkPlus,
-  LuHeart,
-  LuKeyboard,
-} from 'react-icons/lu'
+import { LuArrowLeft, LuDownload, LuHeart } from 'react-icons/lu'
 import api, { mediaUrl } from '../api'
 import Spinner from '../components/Spinner'
 import { getBookPrefs, saveBookPrefs, saveRecentBook } from '../hooks/useBookPrefs'
@@ -28,7 +14,7 @@ import BookmarkSidebar from '../components/reader/BookmarkSidebar'
 import BookmarkDialog from '../components/reader/BookmarkDialog'
 import SelectionPopup from '../components/reader/SelectionPopup'
 import TextOverlay from '../components/reader/TextOverlay'
-import AddToCampaignButton from '../components/campaigns/AddToCampaignButton'
+import ReaderToolbar from '../components/reader/ReaderToolbar'
 
 // Inject page-turn keyframes once at module load
 if (typeof document !== 'undefined' && !document.getElementById('reader-anim')) {
@@ -57,12 +43,6 @@ export default function ReaderView() {
   // regardless of how many jump-navigation history entries were pushed (ToC, bookmarks, search).
   const backPathRef = useRef(location.state?.from ?? null)
 
-  const MODES = [
-    { key: 'page', Icon: LuFileText, label: t('reader.page') },
-    { key: 'spread', Icon: LuColumns2, label: t('reader.spread') },
-    { key: 'pdf', Icon: LuFile, label: t('reader.pdf') },
-  ]
-
   const _prefs = getBookPrefs(bookId)
   const _userPrefs = getUserPrefs()
   const initialPage = parseInt(searchParams.get('page')) || _prefs.page || 1
@@ -76,10 +56,13 @@ export default function ReaderView() {
       ? searchParams.get('view')
       : (_globalMode ?? (['page', 'spread', 'pdf'].includes(_prefs.mode) ? _prefs.mode : 'page'))
 
+  const initialSpreadOffset = _prefs.spreadOffset ?? 0
+
   const [book, setBook] = useState(null)
   const [currentPage, setCurrentPage] = useState(initialPage)
   const [totalPages, setTotalPages] = useState(0)
   const [mode, setMode] = useState(initialMode)
+  const [spreadOffset, setSpreadOffset] = useState(initialSpreadOffset)
   const [pageInput, setPageInput] = useState(String(initialPage))
   const [panel, setPanel] = useState(null)
   const [activeSearchQuery, setActiveSearchQuery] = useState(null)
@@ -122,8 +105,12 @@ export default function ReaderView() {
     (p, currentMode, axis = 'x') => {
       if (totalPages === 0) return
       let page = Math.max(1, Math.min(p, totalPages))
-      if ((currentMode ?? mode) === 'spread' && page > 1 && page % 2 !== 0) {
-        page = page - 1
+      if ((currentMode ?? mode) === 'spread') {
+        // Snap to the nearest left page based on spreadOffset.
+        // offset=0: left pages are even (2,4,6…), page 1 stands alone.
+        // offset=1: left pages are odd (1,3,5…), cover is part of a spread.
+        const isLeftPage = spreadOffset === 1 ? page % 2 !== 0 : page % 2 === 0 || page === 1
+        if (!isLeftPage) page = page - 1
       }
       directionRef.current = page >= currentPageRef.current ? 1 : -1
       axisRef.current = axis
@@ -131,7 +118,7 @@ export default function ReaderView() {
       setCurrentPage(page)
       setPageInput(String(page))
     },
-    [totalPages, mode]
+    [totalPages, mode, spreadOffset]
   )
 
   useEffect(() => {
@@ -146,7 +133,7 @@ export default function ReaderView() {
   useEffect(() => {
     if (!book || mode === 'pdf') return
     const pages = [currentPage]
-    if (mode === 'spread' && currentPage !== 1 && currentPage + 1 <= totalPages)
+    if (mode === 'spread' && (spreadOffset === 1 || currentPage !== 1) && currentPage + 1 <= totalPages)
       pages.push(currentPage + 1)
     pages.forEach((p) => {
       if (pageTextCacheRef.current[p] !== undefined) return
@@ -160,12 +147,12 @@ export default function ReaderView() {
           pageTextCacheRef.current[p] = ''
         })
     })
-  }, [currentPage, mode, book, bookId, totalPages])
+  }, [currentPage, mode, spreadOffset, book, bookId, totalPages])
 
   useEffect(() => {
     if (!book || book.mime_type !== 'application/pdf' || mode === 'pdf') return
     const pages = [currentPage]
-    if (mode === 'spread' && currentPage !== 1 && currentPage + 1 <= totalPages)
+    if (mode === 'spread' && (spreadOffset === 1 || currentPage !== 1) && currentPage + 1 <= totalPages)
       pages.push(currentPage + 1)
     pages.forEach((p) => {
       if (wordsCacheRef.current[p] !== undefined) return
@@ -180,7 +167,7 @@ export default function ReaderView() {
           wordsCacheRef.current[p] = null
         })
     })
-  }, [currentPage, mode, book, bookId, totalPages])
+  }, [currentPage, mode, spreadOffset, book, bookId, totalPages])
 
   useEffect(() => {
     const onMouseUp = (e) => {
@@ -265,7 +252,11 @@ export default function ReaderView() {
     if (mode === 'spread') goToPage(currentPage, 'spread')
   }, [mode]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const step = mode === 'spread' ? (currentPage === 1 ? 1 : 2) : 1
+  useEffect(() => {
+    if (mode === 'spread') goToPage(currentPage, 'spread')
+  }, [spreadOffset]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const step = mode === 'spread' ? 2 : 1
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
@@ -324,7 +315,8 @@ export default function ReaderView() {
   }
 
   const rightPage = currentPage + 1
-  const hasRight = currentPage !== 1 && rightPage <= totalPages
+  // With offset=0: page 1 stands alone; with offset=1, page 1 pairs with page 2.
+  const hasRight = mode === 'spread' && (spreadOffset === 1 || currentPage !== 1) && rightPage <= totalPages
 
   const getAlt = (p) => {
     const text = pageTextCacheRef.current[p]
@@ -333,295 +325,40 @@ export default function ReaderView() {
 
   return (
     <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Toolbar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '10px 20px',
-          background: 'var(--bg-panel)',
-          borderBottom: '1px solid var(--border)',
-          flexWrap: 'wrap',
+      <ReaderToolbar
+        book={book}
+        bookId={bookId}
+        mode={mode}
+        onModeChange={(key) => {
+          setMode(key)
+          saveBookPrefs(bookId, { mode: key })
         }}
-      >
-        <button
-          onClick={() => (backPathRef.current ? navigate(backPathRef.current) : navigate(-1))}
-          aria-label={t('reader.back')}
-          style={{
-            background: 'none',
-            color: 'var(--text-dim)',
-            fontSize: 15,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            border: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          <LuArrowLeft size={15} /> {t('reader.back')}
-        </button>
-        <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
-        <span
-          style={{
-            fontSize: 16,
-            fontWeight: 500,
-            color: 'var(--text)',
-            flex: 1,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {book.title}
-        </span>
-
-        {mode !== 'pdf' && totalPages > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              onClick={() => goToPage(currentPage - step)}
-              disabled={currentPage <= 1}
-              aria-label={t('reader.previousPage')}
-              style={{ ...btnStyle, opacity: currentPage <= 1 ? 0.4 : 1 }}
-            >
-              <LuChevronLeft size={14} />
-            </button>
-            <input
-              id="reader-page-input"
-              type="text"
-              value={pageInput}
-              onChange={(e) => setPageInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && goToPage(parseInt(pageInput) || 1)}
-              onBlur={() => goToPage(parseInt(pageInput) || 1)}
-              aria-label={t('reader.currentPageNumber')}
-              style={{ width: 50, textAlign: 'center', padding: '4px 6px', fontSize: 15 }}
-            />
-            {mode === 'spread' && hasRight && (
-              <span style={{ fontSize: 15, color: 'var(--text-muted)' }}>– {rightPage}</span>
-            )}
-            <span style={{ fontSize: 15, color: 'var(--text-muted)' }}>
-              {t('common.pageOf', { total: totalPages })}
-            </span>
-            <button
-              onClick={() => goToPage(currentPage + step)}
-              disabled={currentPage >= totalPages}
-              aria-label={t('reader.nextPage')}
-              style={{ ...btnStyle, opacity: currentPage >= totalPages ? 0.4 : 1 }}
-            >
-              <LuChevronRight size={14} />
-            </button>
-          </div>
-        )}
-
-        <div style={{ width: 1, height: 20, background: 'var(--border)' }} />
-
-        {/* Mode toggle — hidden on mobile phones, locked to page view */}
-        <div
-          style={{
-            display: isMobilePhone ? 'none' : 'flex',
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            overflow: 'hidden',
-          }}
-        >
-          {MODES.map(({ key, Icon, label }) => (
-            <button
-              key={key}
-              onClick={() => {
-                setMode(key)
-                saveBookPrefs(bookId, { mode: key })
-              }}
-              title={label}
-              style={{
-                background: mode === key ? 'var(--bg-card-hover)' : 'var(--bg-card)',
-                color: mode === key ? 'var(--gold)' : 'var(--text-dim)',
-                border: 'none',
-                borderRight: key !== 'pdf' ? '1px solid var(--border)' : 'none',
-                padding: '5px 12px',
-                cursor: 'pointer',
-                fontSize: 13,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-              }}
-            >
-              <Icon size={13} /> {label}
-            </button>
-          ))}
-        </div>
-
-        {/* Panel selector */}
-        {(() => {
-          const panels = [
-            book.mime_type === 'application/pdf' && mode !== 'pdf'
-              ? { key: 'toc', Icon: LuList, label: t('reader.contents') }
-              : null,
-            mode !== 'pdf'
-              ? { key: 'bookmarks', Icon: LuBookmark, label: t('reader.bookmarks') }
-              : null,
-            book.indexed ? { key: 'search', Icon: LuSearch, label: t('common.search') } : null,
-          ].filter(Boolean)
-          if (panels.length === 0) return null
-          return (
-            <div
-              style={{
-                display: 'flex',
-                border: '1px solid var(--border)',
-                borderRadius: 6,
-                overflow: 'hidden',
-              }}
-            >
-              {panels.map(({ key, Icon, label }, idx) => (
-                <button
-                  key={key}
-                  onClick={() => togglePanel(key)}
-                  title={label}
-                  style={{
-                    background: panel === key ? 'var(--bg-card-hover)' : 'var(--bg-card)',
-                    color: panel === key ? 'var(--gold)' : 'var(--text-dim)',
-                    border: 'none',
-                    borderRight: idx < panels.length - 1 ? '1px solid var(--border)' : 'none',
-                    padding: '5px 12px',
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                  }}
-                >
-                  <Icon size={13} />
-                  {!isMobilePhone && key !== 'search' && <span>{label}</span>}
-                </button>
-              ))}
-            </div>
-          )
-        })()}
-
-        <AddToCampaignButton resourceType="book" resourceId={bookId} />
-
-        <button
-          onClick={() => toggleFavorite('book', bookId)}
-          title={
-            isFavorite('book', bookId)
-              ? t('reader.removeFromFavorites')
-              : t('reader.addToFavorites')
-          }
-          style={{
-            ...btnStyle,
-            color: isFavorite('book', bookId) ? 'var(--gold)' : 'var(--text-muted)',
-          }}
-        >
-          <LuHeart size={14} fill={isFavorite('book', bookId) ? 'var(--gold)' : 'none'} />
-        </button>
-
-        {mode !== 'pdf' && (
-          <button
-            onClick={() => {
-              setPendingBookmark({ page: currentPage })
-              setPendingLabel('')
-            }}
-            title={t('reader.bookmarkPage')}
-            style={btnStyle}
-          >
-            <LuBookmarkPlus size={14} />
-          </button>
-        )}
-
-        <a
-          href={mediaUrl(`/books/${bookId}/file`)}
-          download
-          title={t('reader.downloadFile')}
-          style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            color: 'var(--text-dim)',
-            borderRadius: 4,
-            padding: '4px 12px',
-            fontSize: 14,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 5,
-          }}
-        >
-          <LuDownload size={13} />
-        </a>
-
-        <button
-          onClick={() => setShowShortcuts((v) => !v)}
-          title="Keyboard shortcuts (?)"
-          style={{ ...btnStyle, color: showShortcuts ? 'var(--gold)' : 'var(--text-muted)' }}
-        >
-          <LuKeyboard size={14} />
-        </button>
-      </div>
-
-      {showShortcuts && (
-        <div
-          onClick={() => setShowShortcuts(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            zIndex: 200,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'var(--bg-panel)',
-              border: '1px solid var(--border)',
-              borderRadius: 10,
-              padding: 24,
-              minWidth: 280,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-            }}
-          >
-            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16, color: 'var(--text)' }}>
-              {t('reader.keyboardShortcuts')}
-            </div>
-            {[
-              ['←  /  →', t('reader.shortcutPrevNext')],
-              ['↑  /  ↓', t('reader.shortcutPrevNextVertical')],
-              ['f', t('reader.shortcutFavorite')],
-              ['t', t('reader.shortcutToc')],
-              ['b', t('reader.shortcutBookmarks')],
-              ['s', t('reader.shortcutSearch')],
-              ['?', t('reader.shortcutHelp')],
-              ['Esc', t('reader.shortcutClose')],
-            ].map(([key, desc]) => (
-              <div
-                key={key}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  gap: 24,
-                  padding: '5px 0',
-                  borderBottom: '1px solid var(--border)',
-                  fontSize: 13,
-                }}
-              >
-                <kbd
-                  style={{
-                    fontFamily: 'monospace',
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 4,
-                    padding: '1px 7px',
-                    color: 'var(--gold)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {key}
-                </kbd>
-                <span style={{ color: 'var(--text-dim)' }}>{desc}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        spreadOffset={spreadOffset}
+        onSpreadOffsetChange={(next) => {
+          setSpreadOffset(next)
+          saveBookPrefs(bookId, { spreadOffset: next })
+        }}
+        currentPage={currentPage}
+        totalPages={totalPages}
+        step={step}
+        hasRight={hasRight}
+        rightPage={rightPage}
+        pageInput={pageInput}
+        onPageInputChange={setPageInput}
+        onPageInputCommit={goToPage}
+        panel={panel}
+        onTogglePanel={togglePanel}
+        isMobilePhone={isMobilePhone}
+        showShortcuts={showShortcuts}
+        onToggleShortcuts={() => setShowShortcuts((v) => !v)}
+        onBack={() => (backPathRef.current ? navigate(backPathRef.current) : navigate(-1))}
+        isFavorite={isFavorite('book', bookId)}
+        onToggleFavorite={() => toggleFavorite('book', bookId)}
+        onBookmarkPage={() => {
+          setPendingBookmark({ page: currentPage })
+          setPendingLabel('')
+        }}
+      />
 
       {/* Content + optional sidebar */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex' }}>

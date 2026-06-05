@@ -47,8 +47,7 @@ export default function useReaderGestures({
       const now = Date.now()
       if (now - lastWheelRef.current < 500) return
       lastWheelRef.current = now
-      // Compute step here to avoid capturing stale outer-scope values
-      const wheelStep = mode === 'spread' ? (currentPage === 1 ? 1 : 2) : 1
+      const wheelStep = mode === 'spread' ? 2 : 1
       const absDx = Math.abs(e.deltaX)
       const absDy = Math.abs(e.deltaY)
       if (absDy > absDx) {
@@ -162,7 +161,7 @@ export default function useReaderGestures({
     }
     if (type === 'pan') return
     if (!touchStartRef.current) return
-    const step = mode === 'spread' ? (currentPage === 1 ? 1 : 2) : 1
+    const step = mode === 'spread' ? 2 : 1
     const t = e.changedTouches[0]
     const dx = t.clientX - touchStartRef.current.x
     const dy = t.clientY - touchStartRef.current.y

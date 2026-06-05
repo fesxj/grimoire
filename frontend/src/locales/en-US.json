@@ -157,7 +157,10 @@
     "shortcutBookmarks": "Bookmarks",
     "shortcutSearch": "Search",
     "shortcutHelp": "This help",
-    "shortcutClose": "Close panels"
+    "shortcutClose": "Close panels",
+    "spreadCover": "Cover",
+    "spreadIncludeCover": "Include cover in spread (pair pages 1-2, 3-4…)",
+    "spreadExcludeCover": "Exclude cover from spread (pair pages 2-3, 4-5…)"
   },
   "search": {
     "title": "Search Your Library",

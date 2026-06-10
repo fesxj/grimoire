@@ -17,10 +17,6 @@ services:
       # Generate one with: openssl rand -hex 32
       - SECRET_KEY=change-me
 
-      # Optional — Valkey/Redis URL for page-image caching.
-      # Remove this line (and the valkey service, network, and volume below) if you don't want caching.
-      - VALKEY_URL=redis://valkey:6379/0
-
       # Optional — public base URL of this instance, used to build absolute links (e.g. OPDS feed URLs).
       # Set this to the URL you use to access Grimoire, especially when running behind a reverse proxy.
       # - BASE_URL=https://grimoire.example.com
@@ -29,31 +25,9 @@ services:
       # - OPDS_ENABLED=true
 
     volumes:
-      # Left side: absolute path on the host to your TTRPG library folder (read-only)
+      # Left side: absolute path on the host to your TTRPG library folder.
+      # Grimoire mounts it read-only — use Filebrowser Quantum or Calibre to add/manage files.
+      # See docs/file-management.md for companion tool examples.
       - /path/to/your/library:/library:ro
       # Left side: absolute path on the host where Grimoire stores its database, thumbnails, and cache
       - /path/to/grimoire/data:/data
-
-    # Remove if not using Valkey
-    depends_on:
-      - valkey
-    networks:
-      - grimoire
-
-  # Optional — page-image cache. Remove this service (and the network/volume below) if not needed.
-  valkey:
-    image: valkey/valkey:8-alpine
-    container_name: grimoire-valkey
-    restart: unless-stopped
-    volumes:
-      - valkey-data:/data
-    networks:
-      - grimoire
-
-# Remove if not using Valkey
-volumes:
-  valkey-data:
-
-# Remove if not using Valkey
-networks:
-  grimoire:

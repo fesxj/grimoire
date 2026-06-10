@@ -1,0 +1,66 @@
+# Grimoire + Calibre-Web
+#
+# Calibre-Web provides a lightweight browser UI for an existing Calibre library.
+# It requires a Calibre library that already exists on disk (created by the
+# Calibre desktop app or the full Calibre container). The DOCKER_MODS line
+# installs the Calibre binaries so Calibre-Web can write metadata back to disk.
+#
+# Ports:
+#   8083 — Calibre-Web
+#   9481 — Grimoire
+#
+# Usage:
+#   docker compose -f docs/docker/docker-compose.calibre-web.yml up -d
+#
+# First run: open http://localhost:8083 (default credentials: admin / admin123).
+#   Set the Calibre library path to /library/books (or a subfolder) when
+#   prompted. After editing metadata, trigger a rescan in Grimoire to pick up
+#   updated OPF files.
+#
+# See docs/file-management.md for OPF metadata details.
+
+services:
+  grimoire:
+    image: hunterreadca/grimoire:latest
+    container_name: grimoire
+    restart: unless-stopped
+    ports:
+      - "9481:9481"
+    environment:
+      - LIBRARY_PATH=/library
+      - DATA_PATH=/data
+      - WORKERS=2
+      # Required — generate with: openssl rand -hex 32
+      - SECRET_KEY=change-me
+    volumes:
+      # Grimoire never modifies your files — read-only is safe and recommended
+      - /path/to/your/library:/library:ro
+      - /path/to/grimoire/data:/data
+    networks:
+      - grimoire
+
+  calibre-web:
+    image: lscr.io/linuxserver/calibre-web:latest
+    container_name: grimoire-calibre-web
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      # Set to your local timezone — see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+      - TZ=America/New_York
+      # Installs Calibre binaries so Calibre-Web can write metadata back to disk
+      - DOCKER_MODS=linuxserver/mods:universal-calibre
+    ports:
+      - "8083:8083"
+    volumes:
+      # Read-write so Calibre-Web can update metadata.opf files
+      - /path/to/your/library:/library
+      - calibre_web_config:/config
+    networks:
+      - grimoire
+
+volumes:
+  calibre_web_config:
+
+networks:
+  grimoire:

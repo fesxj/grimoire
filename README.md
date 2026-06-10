@@ -307,6 +307,49 @@ books/
 
 Users with explicit content disabled will not see this system or its books.
 
+### Book metadata from OPF files
+
+Grimoire reads [OPF](https://idpf.org/epub/20/spec/OPF_2.0.1_draft.htm) sidecar files to populate book metadata automatically on first scan. OPF files are the format used by [Calibre](https://calibre-ebook.com/) and many other library managers.
+
+#### Supported fields
+
+| OPF element | Book field |
+|---|---|
+| `dc:title` | Title |
+| `dc:creator` (role=aut) | Authors |
+| `dc:publisher` | Publisher |
+| `dc:date` | Year (4-digit year extracted) |
+| `dc:description` | Description (HTML tags stripped) |
+| `dc:subject` | Tags (lowercased) |
+| `guide/reference[@type='cover']` | Cover image (file is excluded from the book list) |
+
+`dc:contributor` entries (e.g. Calibre's own tool credit) and `dc:identifier` (UUID/ISBN) are intentionally ignored. `dc:language` is parsed but not stored (no matching field).
+
+#### OPF file discovery
+
+The scanner checks two locations for each book file, in priority order:
+
+1. **`<bookname>.opf`** — a sidecar file with the same stem as the PDF, in the same directory. Suits hand-crafted or single-file layouts.
+2. **`metadata.opf`** — a file named `metadata.opf` in the same directory. This is the format Calibre uses when it exports each book into its own subfolder.
+
+A typical Calibre export looks like this and is fully supported:
+
+```
+books/
+└── Dungeons & Dragons/
+    └── core/
+        ├── Players Handbook/
+        │   ├── players_handbook.pdf
+        │   ├── metadata.opf
+        │   └── cover.jpg          ← skipped (referenced as cover in OPF)
+        └── Dungeon Masters Guide/
+            ├── dungeon_masters_guide.pdf
+            ├── metadata.opf
+            └── cover.jpg
+```
+
+OPF metadata is only applied when a book is **first indexed**. Edits made via the web UI are not overwritten on subsequent rescans.
+
 ### Maps — organize by creator or collection
 
 ```

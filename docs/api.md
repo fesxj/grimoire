@@ -447,3 +447,14 @@ The scanner expects files organized as:
 ```
 
 Game system records are created automatically from the folder names under `books/`. Append `(nsfw)` to a system folder name to mark all its content as explicit.
+
+### OPF sidecar metadata
+
+When a book is first indexed, the scanner looks for an OPF metadata file alongside the PDF. Two locations are checked in order:
+
+1. `<bookname>.opf` — same directory, same stem as the PDF.
+2. `metadata.opf` — same directory (Calibre's per-book-folder format).
+
+Fields read: `dc:title`, `dc:creator` (role=aut → authors), `dc:publisher`, `dc:date` (year), `dc:description` (HTML stripped), `dc:subject` (→ tags). Cover images referenced in the OPF `<guide>` are excluded from the book list automatically.
+
+OPF metadata is applied only on first scan. Subsequent rescans do not overwrite values edited via the API.

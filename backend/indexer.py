@@ -7,6 +7,7 @@ import logging
 import hashlib
 import threading
 from pathlib import Path
+from xml.etree import ElementTree
 import fitz  # PyMuPDF
 from PIL import Image
 from sqlalchemy import text
@@ -239,6 +240,82 @@ def _count_eligible_files(directory: Path, extensions: set) -> int:
     return count
 
 
+_OPF_NS = {
+    "dc": "http://purl.org/dc/elements/1.1/",
+    "opf": "http://www.idpf.org/2007/opf",
+}
+
+
+def parse_opf_metadata(opf_path: str) -> dict:
+    """Parse a Calibre/OPF metadata file and return a dict of book fields.
+
+    Returns a dict containing any of: title, authors, description, publisher,
+    year, tags, cover_image_filename. Only keys with actual values are included.
+    cover_image_filename is the bare filename (not a path) of the cover image
+    referenced in the OPF <guide>, if present.
+    """
+    try:
+        tree = ElementTree.parse(opf_path)
+    except Exception as e:
+        logger.warning(f"Could not parse OPF file '{opf_path}': {e}")
+        return {}
+
+    root = tree.getroot()
+    meta = {}
+
+    def _find_text(tag: str) -> str:
+        el = root.find(f"opf:metadata/dc:{tag}", _OPF_NS)
+        return el.text.strip() if el is not None and el.text else ""
+
+    title = _find_text("title")
+    if title:
+        meta["title"] = title
+
+    authors = [
+        el.text.strip()
+        for el in root.findall("opf:metadata/dc:creator", _OPF_NS)
+        if el.text and el.text.strip()
+    ]
+    if authors:
+        meta["authors"] = authors
+
+    description = _find_text("description")
+    if description:
+        # Strip any embedded HTML tags from Calibre descriptions
+        description = re.sub(r"<[^>]+>", "", description).strip()
+        if description:
+            meta["description"] = description
+
+    publisher = _find_text("publisher")
+    if publisher:
+        meta["publisher"] = publisher
+
+    date_str = _find_text("date")
+    if date_str:
+        try:
+            year = int(date_str[:4])
+            if year > 1000:  # Calibre uses 0101-01-01 as a "no date" sentinel
+                meta["year"] = year
+        except (ValueError, IndexError):
+            pass
+
+    subjects = [
+        el.text.strip().lower()
+        for el in root.findall("opf:metadata/dc:subject", _OPF_NS)
+        if el.text and el.text.strip()
+    ]
+    if subjects:
+        meta["tags"] = subjects
+
+    cover_ref = root.find("opf:guide/opf:reference[@type='cover']", _OPF_NS)
+    if cover_ref is not None:
+        href = cover_ref.get("href", "")
+        if href:
+            meta["cover_image_filename"] = Path(href).name
+
+    return meta
+
+
 def scan_library(library_path: str, data_path: str, session: Session, on_progress=None, should_stop=None):
     """Scan the library directory and register all files in the database.
 
@@ -319,6 +396,17 @@ def scan_library(library_path: str, data_path: str, session: Session, on_progres
             for root, dirs, files in os.walk(system_dir):
                 dirs[:] = [d for d in dirs if not d.startswith(".")]
 
+                # Collect cover image filenames declared in any OPF files in this
+                # directory so we can skip them — Calibre exports a cover JPG that
+                # would otherwise appear as a 1-page book entry.
+                opf_cover_filenames: set[str] = set()
+                for f in files:
+                    if Path(f).suffix.lower() == ".opf":
+                        opf_data = parse_opf_metadata(os.path.join(root, f))
+                        cover_fn = opf_data.get("cover_image_filename")
+                        if cover_fn:
+                            opf_cover_filenames.add(cover_fn)
+
                 for filename in sorted(files):
                     if filename.startswith("."):
                         continue
@@ -327,6 +415,10 @@ def scan_library(library_path: str, data_path: str, session: Session, on_progres
                     ext = Path(filename).suffix.lower()
 
                     if ext not in DOC_EXTS and ext not in IMAGE_EXTS:
+                        continue
+
+                    if filename in opf_cover_filenames:
+                        logger.debug(f"Skipping OPF cover image: {filepath}")
                         continue
 
                     scanned_books += 1
@@ -379,15 +471,28 @@ def scan_library(library_path: str, data_path: str, session: Session, on_progres
                             logger.warning(f"Cannot stat file, skipping: {filepath}")
                             continue
 
+                        # Check sibling <stem>.opf first, then Calibre's metadata.opf in the same dir.
+                        opf_path = os.path.join(root, Path(filename).stem + ".opf")
+                        if not os.path.isfile(opf_path):
+                            opf_path = os.path.join(root, "metadata.opf")
+                        opf_meta = parse_opf_metadata(opf_path) if os.path.isfile(opf_path) else {}
+                        if opf_meta:
+                            logger.info(f"Applying OPF metadata to '{filename}' from '{Path(opf_path).name}'")
+
                         book = Book(
                             game_system_id=system.id,
-                            title=title,
+                            title=opf_meta.get("title", title),
                             filename=filename,
                             filepath=filepath,
                             relative_path=relative_path,
                             category=category,
                             file_size=file_size,
                             mime_type="application/pdf" if ext == ".pdf" else f"image/{ext[1:]}",
+                            authors=opf_meta.get("authors"),
+                            description=opf_meta.get("description"),
+                            publisher=opf_meta.get("publisher"),
+                            year=opf_meta.get("year"),
+                            tags=opf_meta.get("tags"),
                         )
 
                         # Commit the book record first so that if a subsequent

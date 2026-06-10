@@ -1,0 +1,45 @@
+# Grimoire + Valkey page cache
+#
+# Valkey (Redis-compatible) keeps rendered PDF page images in memory for faster
+# repeat loads. Recommended for large libraries or multi-user setups.
+# Without Valkey, rendered pages are cached to disk under DATA_PATH instead.
+#
+# Usage:
+#   docker compose -f docs/docker/docker-compose.valkey.yml up -d
+
+services:
+  grimoire:
+    image: hunterreadca/grimoire:latest
+    container_name: grimoire
+    restart: unless-stopped
+    ports:
+      - "9481:9481"
+    environment:
+      - LIBRARY_PATH=/library
+      - DATA_PATH=/data
+      - WORKERS=2
+      # Required — generate with: openssl rand -hex 32
+      - SECRET_KEY=change-me
+      - VALKEY_URL=redis://valkey:6379/0
+    volumes:
+      - /path/to/your/library:/library:ro
+      - /path/to/grimoire/data:/data
+    depends_on:
+      - valkey
+    networks:
+      - grimoire
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: grimoire-valkey
+    restart: unless-stopped
+    volumes:
+      - valkey_data:/data
+    networks:
+      - grimoire
+
+volumes:
+  valkey_data:
+
+networks:
+  grimoire:

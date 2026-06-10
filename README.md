@@ -91,10 +91,11 @@ See [Library Structure](#library-structure) for the full layout and category rul
 
 ### 2. Run with Docker Compose
 
-Edit `docker-compose.yml` and set your `SECRET_KEY`, then start:
+Copy the default compose file, set your `SECRET_KEY`, then start:
 
 ```bash
-# Edit docker-compose.yml and set SECRET_KEY
+cp docs/docker/docker-compose.yml docker-compose.yml
+# Edit docker-compose.yml and set SECRET_KEY and volume paths
 docker compose up -d
 open http://localhost:9481
 ```
@@ -124,34 +125,28 @@ services:
     environment:
       SECRET_KEY: "generate-with-openssl-rand-hex-32"
     volumes:
-      - /path/to/your/library:/app/library:ro
-      - /path/to/grimoire/data:/app/data
+      - /path/to/your/library:/library:ro   # read-only — use Filebrowser or Calibre to manage files
+      - /path/to/grimoire/data:/data
 ```
 
-### 5. With Valkey page cache (recommended for large libraries)
+### 5. Example compose files
 
-```yaml
-services:
-  grimoire:
-    image: hunterreadca/grimoire:latest
-    ports:
-      - "9481:9481"
-    environment:
-      SECRET_KEY: "generate-with-openssl-rand-hex-32"
-      VALKEY_URL: "redis://valkey:6379/0"
-    volumes:
-      - /path/to/your/library:/app/library:ro
-      - /path/to/grimoire/data:/app/data
-    depends_on:
-      - valkey
+Ready-to-use compose files for common setups are in [`docs/docker/`](docs/docker/):
 
-  valkey:
-    image: valkey/valkey:8-alpine
-    volumes:
-      - valkey_data:/data
+| File | What it runs |
+|---|---|
+| [`docs/docker/docker-compose.yml`](docs/docker/docker-compose.yml) | Grimoire (default, no extras) |
+| [`docs/docker/docker-compose.valkey.yml`](docs/docker/docker-compose.valkey.yml) | Grimoire + Valkey page cache (recommended for large libraries) |
+| [`docs/docker/docker-compose.filebrowser.yml`](docs/docker/docker-compose.filebrowser.yml) | Grimoire + Filebrowser Quantum (browser-based file uploads) |
+| [`docs/docker/docker-compose.calibre.yml`](docs/docker/docker-compose.calibre.yml) | Grimoire + Calibre full desktop (metadata editing, OPF export) |
+| [`docs/docker/docker-compose.calibre-web.yml`](docs/docker/docker-compose.calibre-web.yml) | Grimoire + Calibre-Web (lightweight Calibre browser UI) |
 
-volumes:
-  valkey_data:
+Each file has inline comments explaining the options. Copy and edit the one that fits your setup:
+
+```bash
+cp docs/docker/docker-compose.valkey.yml docker-compose.yml
+# Edit SECRET_KEY and volume paths, then:
+docker compose up -d
 ```
 
 ### 6. Build from source
@@ -395,6 +390,21 @@ Values are arrays of tag strings.
 ```
 
 Tags are applied (or updated) every time the library is rescanned. Tags set via the web UI are replaced by the values in `tags.json` on the next scan.
+
+---
+
+## Adding Files to Your Library
+
+Grimoire mounts your library folder **read-only** and never modifies your files. To upload, organize, or remove content, use a companion tool that mounts the same library folder with write access.
+
+Two tools integrate especially well:
+
+- **[Filebrowser Quantum](docs/file-management.md#filebrowser-quantum)** — drag-and-drop file uploads from any browser, no desktop app needed
+- **[Calibre](docs/file-management.md#calibre)** — full book management with metadata editing; Grimoire reads the `.opf` sidecar files Calibre writes ([see OPF support](#book-metadata-from-opf-files))
+
+See [docs/file-management.md](docs/file-management.md) for Docker Compose examples for each tool.
+
+After adding files, trigger a **Rescan** in Grimoire (sidebar or Settings → Maintenance) to index the new content.
 
 ---
 

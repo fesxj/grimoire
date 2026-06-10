@@ -1,0 +1,65 @@
+# Grimoire + Calibre (full desktop)
+#
+# Runs the full Calibre desktop application via a browser-accessible noVNC
+# interface (LinuxServer.io image). Use it to manage your book collection,
+# edit metadata, and export OPF sidecar files that Grimoire reads on rescan.
+#
+# Ports:
+#   8080 — Calibre desktop (noVNC, browser-based GUI)
+#   8081 — Calibre Content Server (lightweight web book browser)
+#   9481 — Grimoire
+#
+# Usage:
+#   docker compose -f docs/docker/docker-compose.calibre.yml up -d
+#
+# First run: open http://localhost:8080, set Calibre's library path to
+#   /library/books (or a system subfolder). Calibre will write metadata.opf
+#   and cover.jpg alongside each book. After editing metadata, trigger a
+#   rescan in Grimoire to pick up the changes.
+#
+# See docs/file-management.md for OPF metadata details.
+
+services:
+  grimoire:
+    image: hunterreadca/grimoire:latest
+    container_name: grimoire
+    restart: unless-stopped
+    ports:
+      - "9481:9481"
+    environment:
+      - LIBRARY_PATH=/library
+      - DATA_PATH=/data
+      - WORKERS=2
+      # Required — generate with: openssl rand -hex 32
+      - SECRET_KEY=change-me
+    volumes:
+      # Grimoire never modifies your files — read-only is safe and recommended
+      - /path/to/your/library:/library:ro
+      - /path/to/grimoire/data:/data
+    networks:
+      - grimoire
+
+  calibre:
+    image: lscr.io/linuxserver/calibre:latest
+    container_name: grimoire-calibre
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      # Set to your local timezone — see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+      - TZ=America/New_York
+    ports:
+      - "8080:8080"   # Calibre desktop (noVNC)
+      - "8081:8081"   # Calibre Content Server
+    volumes:
+      # Read-write so Calibre can write metadata.opf and cover.jpg files
+      - /path/to/your/library:/library
+      - calibre_config:/config
+    networks:
+      - grimoire
+
+volumes:
+  calibre_config:
+
+networks:
+  grimoire:

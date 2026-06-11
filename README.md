@@ -9,6 +9,8 @@
   [![React](https://img.shields.io/badge/react-18-61DAFB?logo=react&logoColor=white)](https://react.dev/)
   [![License](https://img.shields.io/github/license/hunter-read/grimoire)](LICENSE)
   [![Docker](https://img.shields.io/docker/pulls/hunterreadca/grimoire?logo=docker&logoColor=white)](https://hub.docker.com/r/hunterreadca/grimoire)
+
+  **[📖 Documentation](https://grimoirecodex.org)**
 </div>
 
 

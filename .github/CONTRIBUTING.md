@@ -31,7 +31,7 @@ Open a pull request with your changes — no issue required for translation-only
 
 ## Community
 
-Interested in helping build a community around Grimoire? I'm looking for someone to run a **Discord server** and/or a **subreddit**. If that sounds like you, open an issue or reach out directly.
+Join the [Discord server](https://discord.gg/9Sd4CGZC63) to chat, share feedback, or get help.
 
 ## Contributing code
 

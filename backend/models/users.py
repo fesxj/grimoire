@@ -26,6 +26,10 @@ class User(Base):
     hashed_password = Column(String(255), nullable=True)
     role = Column(String(20), default="player")
     allow_explicit = Column(Boolean, default=True)
+    # Whether the user may create campaigns, be added to new campaigns, and manage
+    # campaign content. Disabling it preserves existing campaigns but locks the user
+    # out of all campaign writes. NULL is treated as enabled.
+    campaign_access = Column(Boolean, default=True)
     opds_token = Column(String(64), nullable=True, unique=True, index=True)
     oidc_subject = Column(String(255), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=_utcnow)

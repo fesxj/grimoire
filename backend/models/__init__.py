@@ -7,13 +7,19 @@ and re-exported here so callers can keep using ``from backend.models import X``.
 from .base import Base
 from .campaigns import (
     Campaign,
+    CampaignCategory,
+    CampaignFile,
     CampaignMember,
     CampaignResource,
+    CampaignResourceShare,
     CampaignSchedule,
     GMSessionNote,
     PlayerSessionNote,
     SessionAvailability,
     SessionNote,
+    WikiPage,
+    WikiPageLink,
+    WikiPageShare,
 )
 from .db import init_db
 from .library import Book, BookFolder, GameSystem
@@ -41,9 +47,15 @@ __all__ = [
     "Campaign",
     "CampaignMember",
     "CampaignResource",
+    "CampaignResourceShare",
+    "CampaignFile",
     "SessionNote",
     "PlayerSessionNote",
     "GMSessionNote",
+    "WikiPage",
+    "WikiPageShare",
+    "WikiPageLink",
+    "CampaignCategory",
     "CampaignSchedule",
     "SessionAvailability",
     # Settings

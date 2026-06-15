@@ -3,7 +3,7 @@ import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ...config import SessionLocal, ALLOW_PASSWORD_AUTHENTICATION_ENV, OIDC_ENV
+from ...config import SessionLocal, ALLOW_PASSWORD_AUTHENTICATION_ENV, DISABLE_PASSWORD_CHANGE, OIDC_ENV
 from ...auth import require_admin, get_current_user, CurrentUser
 from ._helpers import (
     _get_raw,
@@ -73,6 +73,12 @@ def update_settings(data: SettingsPatch, _: CurrentUser = Depends(require_admin)
             val = getattr(data, key)
             if val is not None:
                 _set(db, key, "true" if val else "false")
+        if data.campaign_uploads_disabled is not None:
+            _set(db, "campaign_uploads_disabled", "true" if data.campaign_uploads_disabled else "false")
+        if data.campaign_upload_max_file_mb is not None:
+            _set(db, "campaign_upload_max_file_mb", str(max(0, data.campaign_upload_max_file_mb)))
+        if data.campaign_upload_max_total_mb is not None:
+            _set(db, "campaign_upload_max_total_mb", str(max(0, data.campaign_upload_max_total_mb)))
         if data.password_auth_enabled is not None:
             if ALLOW_PASSWORD_AUTHENTICATION_ENV is not None:
                 raise HTTPException(
@@ -182,6 +188,10 @@ def get_ui_settings(_: CurrentUser = Depends(get_current_user)):
             "show_stat_maps": raw["show_stat_maps"] == "true",
             "show_stat_tokens": raw["show_stat_tokens"] == "true",
             "show_stat_size": raw["show_stat_size"] == "true",
+            "disable_password_change": DISABLE_PASSWORD_CHANGE,
+            "campaign_uploads_disabled": raw["campaign_uploads_disabled"] == "true",
+            "campaign_upload_max_file_mb": int(raw.get("campaign_upload_max_file_mb") or 0),
+            "campaign_upload_max_total_mb": int(raw.get("campaign_upload_max_total_mb") or 0),
         }
     finally:
         db.close()

@@ -40,6 +40,19 @@ export default function UsersTab() {
     }
   }
 
+  const handleCampaignAccessChange = async (userId, allowed) => {
+    try {
+      const updated = await api.patch(`/users/${userId}`, { campaign_access: allowed })
+      setUsers(
+        users.map((u) =>
+          u.id === updated.id ? { ...u, campaign_access: updated.campaign_access } : u
+        )
+      )
+    } catch (err) {
+      setError(err.message || t('users.failedUpdateCampaignAccess'))
+    }
+  }
+
   const handlePasswordReset = async (userId, newPassword) => {
     try {
       await api.patch(`/users/${userId}`, { password: newPassword })
@@ -155,8 +168,10 @@ export default function UsersTab() {
             key={u.id}
             user={u}
             currentUserId={currentUser.id}
+            currentUserRole={currentUser.role}
             onRoleChange={handleRoleChange}
             onExplicitChange={handleExplicitChange}
+            onCampaignAccessChange={handleCampaignAccessChange}
             onPasswordReset={handlePasswordReset}
             onEmailChange={handleEmailChange}
             onDelete={handleDelete}

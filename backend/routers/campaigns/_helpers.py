@@ -5,12 +5,20 @@ from typing import Optional, List
 
 from fastapi import HTTPException
 
-from ...models import Campaign, CampaignMember
+from ...models import Campaign, CampaignMember, User
 from ...auth import CurrentUser
 
 
 def is_gm_or_admin(user: CurrentUser) -> bool:
     return user.role in ("admin", "gm")
+
+
+def user_has_campaign_access(db, user_id: str) -> bool:
+    """Whether a user may create/join/manage campaigns. NULL/missing → enabled."""
+    u = db.query(User).filter_by(id=user_id).first()
+    if u is None:
+        return False
+    return u.campaign_access is None or bool(u.campaign_access)
 
 
 def get_campaign_or_404(db, campaign_id: str) -> Campaign:
@@ -20,10 +28,15 @@ def get_campaign_or_404(db, campaign_id: str) -> Campaign:
     return c
 
 
-def assert_can_manage(campaign: Campaign, user: CurrentUser):
-    """Owner or admin can manage."""
-    if campaign.owner_id != user.id and user.role != "admin":
+def assert_can_manage(campaign: Campaign, user: CurrentUser, db):
+    """Only the owner can manage a campaign, and only while their campaign access
+    is enabled. A disabled owner locks the campaign read-only for everyone."""
+    if campaign.owner_id != user.id:
         raise HTTPException(403, "Not authorised to manage this campaign")
+    if not user_has_campaign_access(db, campaign.owner_id):
+        raise HTTPException(
+            403, "Campaign is locked: the GM's campaign access has been disabled"
+        )
 
 
 def is_member(db, campaign_id: str, user_id: str) -> bool:
@@ -36,10 +49,53 @@ def is_member(db, campaign_id: str, user_id: str) -> bool:
 
 
 def can_view(campaign: Campaign, user: CurrentUser, db) -> bool:
-    """Owner, accepted members, or admin can view."""
-    if user.role == "admin" or campaign.owner_id == user.id:
+    """Owner or accepted members can view the full campaign."""
+    if campaign.owner_id == user.id:
         return True
     return is_member(db, campaign.id, user.id)
+
+
+def build_members(c: Campaign, db) -> list:
+    """Full member list for a campaign: the GM owner row first, then players."""
+    from ...models import User
+
+    rows = db.query(CampaignMember).filter_by(campaign_id=c.id).all()
+    all_users = {u.id: u for u in db.query(User).all()}
+    owner = all_users.get(c.owner_id)
+    def _access(u) -> bool:
+        return u is None or u.campaign_access is None or bool(u.campaign_access)
+
+    members = []
+    if owner:
+        members.append(
+            {
+                "user_id": c.owner_id,
+                "username": owner.username,
+                "display_name": owner.display_name,
+                "status": "accepted",
+                "character_name": c.gm_title,
+                "is_owner": True,
+                "campaign_access": _access(owner),
+            }
+        )
+    members += [
+        {
+            "id": m.id,
+            "user_id": m.user_id,
+            "username": all_users[m.user_id].username if m.user_id in all_users else "",
+            "display_name": all_users[m.user_id].display_name if m.user_id in all_users else None,
+            "status": m.status,
+            "character_name": m.character_name,
+            "is_owner": False,
+            "campaign_access": _access(all_users.get(m.user_id)),
+            "has_art": bool(m.character_art_path),
+            "has_sheet": bool(m.character_sheet_path),
+            "character_sheet_filename": m.character_sheet_filename,
+            "character_sheet_url": m.character_sheet_url,
+        }
+        for m in rows
+    ]
+    return members
 
 
 def serialize_campaign(c: Campaign, members: list, db) -> dict:
@@ -47,7 +103,15 @@ def serialize_campaign(c: Campaign, members: list, db) -> dict:
 
     owner = db.query(User).filter_by(id=c.owner_id).first()
     owner_display = owner.display_name or owner.username if owner else ""
-    has_schedule = db.query(CampaignSchedule).filter_by(campaign_id=c.id).first() is not None
+    owner_has_access = owner is None or owner.campaign_access is None or bool(owner.campaign_access)
+    schedule = db.query(CampaignSchedule).filter_by(campaign_id=c.id).first()
+
+    # Next upcoming scheduled session date (YYYY-MM-DD), if an enabled schedule exists.
+    next_session = None
+    if schedule and schedule.enabled and schedule.definition:
+        upcoming = compute_next_sessions(schedule.definition, n=1)
+        next_session = upcoming[0] if upcoming else None
+
     return {
         "id": c.id,
         "name": c.name,
@@ -58,10 +122,18 @@ def serialize_campaign(c: Campaign, members: list, db) -> dict:
         "gm_title": c.gm_title,
         "parent_campaign_id": c.parent_campaign_id,
         "system_id": c.system_id,
-        "has_schedule": has_schedule,
+        "system_name": c.system_name,
+        "has_schedule": schedule is not None,
+        "next_session": next_session,
+        "has_banner": bool(c.banner_path),
+        # True when the owner's campaign access is disabled — the campaign is then
+        # read-only for everyone (players keep view access, lose all writes).
+        "locked": not owner_has_access,
+        "owner_has_campaign_access": owner_has_access,
         "members": members,
         "created_at": c.created_at.isoformat(),
         "updated_at": c.updated_at.isoformat(),
+        "last_accessed_at": c.last_accessed_at.isoformat() if c.last_accessed_at else None,
     }
 
 

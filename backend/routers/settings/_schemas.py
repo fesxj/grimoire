@@ -20,6 +20,9 @@ class SettingsPatch(BaseModel):
     show_stat_maps: Optional[bool] = None
     show_stat_tokens: Optional[bool] = None
     show_stat_size: Optional[bool] = None
+    campaign_uploads_disabled: Optional[bool] = None
+    campaign_upload_max_file_mb: Optional[int] = None
+    campaign_upload_max_total_mb: Optional[int] = None
     password_auth_enabled: Optional[bool] = None
     custom_login_message_enabled: Optional[bool] = None
     custom_login_message: Optional[str] = None  # HTML (sanitized on save)

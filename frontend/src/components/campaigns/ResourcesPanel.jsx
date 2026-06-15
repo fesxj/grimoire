@@ -7,19 +7,26 @@ import {
   LuUser,
   LuPlus,
   LuTrash2,
-  LuEye,
-  LuEyeOff,
   LuSearch,
   LuX,
   LuChevronRight,
+  LuFolder,
+  LuFolderCog,
+  LuFile,
+  LuUpload,
 } from 'react-icons/lu'
 import { campaigns, mediaUrl } from '../../api'
+import { useAuth } from '../../context/AuthContext'
+import { useUISettings } from '../../context/UISettingsContext'
 import Spinner from '../Spinner'
+import CategoryManager from './CategoryManager'
+import { CampaignIcon } from './campaignIcons'
 
 const TYPE_ICONS = {
   book: { Icon: LuBookOpen, color: '#a78bfa' },
   map: { Icon: LuMap, color: '#60a5fa' },
   token: { Icon: LuUser, color: '#34d399' },
+  file: { Icon: LuFile, color: '#e0b341' },
 }
 
 const RESOURCE_NAV = {
@@ -28,49 +35,65 @@ const RESOURCE_NAV = {
   token: (id) => `/tokens/${id}`,
 }
 
-function ResourceRow({ resource, isOwner, isGmCampaign, onRemove, onToggleShare }) {
+// Visibility selector order: public, then private, then GM-only.
+const VISIBILITY_OPTIONS = ['public', 'private', 'gm']
+
+function ResourceRow({
+  campaignId,
+  resource,
+  isOwner,
+  isGmCampaign,
+  members,
+  categories,
+  onRemove,
+  onSetVisibility,
+  onSetShares,
+  onSetCategory,
+  onDragStart,
+}) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const [hovered, setHovered] = useState(false)
   const { Icon } = TYPE_ICONS[resource.resource_type] || { Icon: LuBookOpen }
-
   const isBook = resource.resource_type === 'book'
-  const thumbUrl = resource.has_thumbnail
-    ? mediaUrl(
-        `/${isBook ? 'books' : resource.resource_type + 's'}/${resource.resource_id}/thumbnail`
-      )
-    : null
+  const isFile = resource.resource_type === 'file'
 
-  const handleNav = () =>
+  const thumbUrl =
+    resource.has_thumbnail && !isFile
+      ? mediaUrl(
+          `/${isBook ? 'books' : resource.resource_type + 's'}/${resource.resource_id}/thumbnail`
+        )
+      : null
+
+  const handleNav = () => {
+    if (isFile) {
+      window.open(campaigns.fileUrl(campaignId, resource.resource_id), '_blank')
+      return
+    }
     navigate(RESOURCE_NAV[resource.resource_type]?.(resource.resource_id) ?? '/', {
       state: { from: window.location.pathname },
     })
+  }
+
+  const stop = (e) => e.stopPropagation()
 
   return (
     <div
-      onClick={handleNav}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          handleNav()
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open ${resource.name || resource.resource_id}`}
+      draggable={isOwner}
+      onDragStart={(e) => onDragStart?.(e, resource)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
         display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '10px 14px',
+        alignItems: 'stretch',
+        gap: 10,
+        padding: '10px 12px',
         background: hovered ? 'var(--bg-card-hover)' : 'var(--bg-card)',
         border: '1px solid var(--border)',
         borderRadius: 8,
-        cursor: 'pointer',
         transition: 'background 0.15s',
         marginBottom: 6,
+        cursor: isOwner ? 'grab' : 'default',
       }}
     >
       <div
@@ -97,118 +120,159 @@ function ResourceRow({ resource, isOwner, isGmCampaign, onRemove, onToggleShare 
         )}
       </div>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {/* Row 1 — title (clickable) */}
         <div
-          style={{
-            fontSize: 15,
-            fontWeight: 500,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+          onClick={handleNav}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              handleNav()
+            }
           }}
+          role="button"
+          tabIndex={0}
+          aria-label={`Open ${resource.name || resource.resource_id}`}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', minWidth: 0 }}
         >
-          {resource.name || resource.resource_id}
-        </div>
-        {resource.subtitle && (
-          <div
+          <span
             style={{
-              fontSize: 12,
-              color: 'var(--text-muted)',
-              marginTop: 2,
+              flex: 1,
+              fontSize: 15,
+              fontWeight: 500,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
             }}
           >
-            {resource.subtitle}
-          </div>
-        )}
-      </div>
+            {resource.name || resource.resource_id}
+          </span>
+          {resource.subtitle && (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>
+              {resource.subtitle}
+            </span>
+          )}
+          <LuChevronRight size={15} color="var(--text-muted)" style={{ flexShrink: 0 }} />
+        </div>
 
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
-        {isOwner && (
-          <>
+        {/* Row 2 — options */}
+        {isOwner ? (
+          <div
+            style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}
+            onClick={stop}
+            role="presentation"
+          >
             {isGmCampaign && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onToggleShare(resource.id, !resource.shared)
-                }}
-                aria-label={
-                  resource.shared ? t('resources.sharedAriaLabel') : t('resources.privateAriaLabel')
-                }
+              <select
+                value={resource.visibility}
+                onChange={(e) => onSetVisibility(resource.id, e.target.value)}
+                aria-label={t('resources.visibilityLabel')}
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  color: resource.shared ? 'var(--gold)' : 'var(--text-muted)',
-                  padding: '6px 4px',
-                  margin: '-6px 0',
-                  display: 'flex',
+                  ...selectStyle,
+                  color: resource.visibility === 'public' ? 'var(--gold)' : 'var(--text-dim)',
                 }}
               >
-                {resource.shared ? (
-                  <LuEye size={14} aria-hidden="true" />
-                ) : (
-                  <LuEyeOff size={14} aria-hidden="true" />
-                )}
-              </button>
+                {VISIBILITY_OPTIONS.map((v) => (
+                  <option key={v} value={v}>
+                    {t(`resources.vis_${v}`)}
+                  </option>
+                ))}
+              </select>
+            )}
+            {categories?.length > 0 && (
+              <select
+                value={resource.category_id || ''}
+                onChange={(e) => onSetCategory(resource.id, e.target.value)}
+                aria-label={t('resources.categoryLabel')}
+                style={{ ...selectStyle, maxWidth: 150 }}
+              >
+                <option value="">{t('resources.typeGroup')}</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
             )}
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                onRemove(resource.id)
-              }}
+              onClick={() => onRemove(resource)}
               aria-label={`Remove ${resource.name || resource.resource_id}`}
               style={{
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
                 color: 'var(--text-muted)',
-                padding: '6px 4px',
-                margin: '-6px 0',
+                padding: 4,
                 display: 'flex',
               }}
             >
               <LuTrash2 size={14} aria-hidden="true" />
             </button>
-          </>
+          </div>
+        ) : (
+          isGmCampaign && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {t(`resources.vis_${resource.visibility}`)}
+            </span>
+          )
         )}
-        {!isOwner && isGmCampaign && (
-          <span
-            style={{ fontSize: 11, color: resource.shared ? 'var(--gold)' : 'var(--text-muted)' }}
+
+        {/* Row 3 — private share checkboxes */}
+        {isOwner && isGmCampaign && resource.visibility === 'private' && members.length > 0 && (
+          <div
+            onClick={stop}
+            role="presentation"
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 2 }}
           >
-            {resource.shared ? t('resources.shared') : t('resources.private')}
-          </span>
+            {members.map((m) => {
+              const checked = (resource.shared_user_ids || []).includes(m.user_id)
+              return (
+                <label
+                  key={m.user_id}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontSize: 11,
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? [...(resource.shared_user_ids || []), m.user_id]
+                        : (resource.shared_user_ids || []).filter((id) => id !== m.user_id)
+                      onSetShares(resource.id, next)
+                    }}
+                  />
+                  {m.character_name || m.display_name || m.username}
+                </label>
+              )
+            })}
+          </div>
         )}
-        <LuChevronRight size={15} color="var(--text-muted)" />
       </div>
     </div>
   )
 }
 
-function ResourcePicker({ campaignId, isGmCampaign, linkedIds, onAdd, onClose }) {
+function ResourcePicker({ campaignId, linkedIds, onAdd, onClose }) {
   const { t } = useTranslation()
-
   const TYPE_TABS = [
     { key: '', label: t('resources.all') },
     { key: 'book', label: t('resources.books') },
     { key: 'map', label: t('resources.maps') },
     { key: 'token', label: t('resources.tokens') },
   ]
-
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
-  const [shared, setShared] = useState(false)
   const searchRef = useRef(null)
   const debounce = useRef(null)
-
-  useEffect(() => {
-    searchRef.current?.focus()
-    doSearch('', '')
-  }, [])
 
   const doSearch = (q, type) => {
     setLoading(true)
@@ -218,6 +282,11 @@ function ResourcePicker({ campaignId, isGmCampaign, linkedIds, onAdd, onClose })
       .catch(() => setResults([]))
       .finally(() => setLoading(false))
   }
+
+  useEffect(() => {
+    searchRef.current?.focus()
+    doSearch('', '')
+  }, [])
 
   const handleQuery = (v) => {
     setQuery(v)
@@ -235,7 +304,7 @@ function ResourcePicker({ campaignId, isGmCampaign, linkedIds, onAdd, onClose })
       await campaigns.addResource(campaignId, {
         resource_type: item.resource_type,
         resource_id: item.resource_id,
-        shared,
+        visibility: 'public',
       })
       onAdd()
     } catch (err) {
@@ -323,7 +392,6 @@ function ResourcePicker({ campaignId, isGmCampaign, linkedIds, onAdd, onClose })
           }}
         />
         <input
-          id="resource-picker-search"
           ref={searchRef}
           value={query}
           onChange={(e) => handleQuery(e.target.value)}
@@ -341,24 +409,6 @@ function ResourcePicker({ campaignId, isGmCampaign, linkedIds, onAdd, onClose })
           }}
         />
       </div>
-
-      {isGmCampaign && (
-        <label
-          htmlFor="resource-share-default"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            fontSize: 12,
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            marginBottom: 10,
-          }}
-        >
-          <input id="resource-share-default" type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
-          {t('resources.shareByDefault')}
-        </label>
-      )}
 
       <div
         style={{
@@ -394,7 +444,6 @@ function ResourcePicker({ campaignId, isGmCampaign, linkedIds, onAdd, onClose })
               Icon: LuBookOpen,
               color: 'var(--text-muted)',
             }
-
             return (
               <div
                 key={key}
@@ -477,16 +526,24 @@ function ResourcePicker({ campaignId, isGmCampaign, linkedIds, onAdd, onClose })
 
 export default function ResourcesPanel({ campaign, isOwner }) {
   const { t } = useTranslation()
+  const { user } = useAuth()
+  const ui = useUISettings()
   const isGmCampaign = campaign.is_gm_campaign
 
   const TYPE_LABELS = {
     book: t('resources.books'),
     map: t('resources.maps'),
     token: t('resources.tokens'),
+    file: t('resources.files'),
   }
 
   const [resources, setResources] = useState(null)
+  const [categories, setCategories] = useState([])
   const [adding, setAdding] = useState(false)
+  const [managingCats, setManagingCats] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)
+  const dragId = useRef(null)
 
   const load = () => {
     campaigns
@@ -494,18 +551,87 @@ export default function ResourcesPanel({ campaign, isOwner }) {
       .then(setResources)
       .catch(() => setResources([]))
   }
+  const loadCategories = () => {
+    campaigns
+      .listCategories(campaign.id, 'resource')
+      .then(setCategories)
+      .catch(() => setCategories([]))
+  }
 
   useEffect(() => {
     load()
+    loadCategories()
   }, [campaign.id])
 
-  const remove = async (resourceId) => {
-    await campaigns.removeResource(campaign.id, resourceId)
+  const members = (campaign.members || []).filter((m) => !m.is_owner)
+
+  const remove = async (resource) => {
+    if (resource.resource_type === 'file' && !confirm(t('resources.deleteFileConfirm'))) return
+    await campaigns.removeResource(campaign.id, resource.id)
     load()
   }
 
-  const toggleShare = async (resourceId, shared) => {
-    await campaigns.updateResource(campaign.id, resourceId, shared)
+  const setVisibility = async (resourceId, visibility) => {
+    await campaigns.updateResource(campaign.id, resourceId, { visibility })
+    load()
+  }
+  const setShares = async (resourceId, ids) => {
+    await campaigns.updateResource(campaign.id, resourceId, { shared_user_ids: ids })
+    load()
+  }
+  const setCategory = async (resourceId, categoryId) => {
+    await campaigns.updateResource(campaign.id, resourceId, { category_id: categoryId || '' })
+    load()
+  }
+
+  const uploadDisabled = ui.campaign_uploads_disabled && user?.role !== 'admin'
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploading(true)
+    try {
+      await campaigns.uploadFile(campaign.id, file)
+      load()
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // --- Drag and drop (owner only) ---
+  const onDragStart = (e, resource) => {
+    dragId.current = resource.id
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const onDropToGroup = async (group) => {
+    const id = dragId.current
+    dragId.current = null
+    if (!id) return
+    // Dropping onto a custom category sets category_id; onto a type group clears it.
+    const target = group.custom ? group.key : ''
+    const res = resources.find((r) => r.id === id)
+    if (res && (res.category_id || '') !== target) {
+      await setCategory(id, target)
+    }
+  }
+  const onDropOnResource = async (e, target) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const id = dragId.current
+    dragId.current = null
+    if (!id || id === target.id) return
+    // Reorder: place dragged before target, and adopt target's category.
+    const dragged = resources.find((r) => r.id === id)
+    if (dragged && (dragged.category_id || '') !== (target.category_id || '')) {
+      await campaigns.updateResource(campaign.id, id, { category_id: target.category_id || '' })
+    }
+    const ids = resources.map((r) => r.id).filter((x) => x !== id)
+    const idx = ids.indexOf(target.id)
+    ids.splice(idx, 0, id)
+    await campaigns.reorderResources(campaign.id, ids)
     load()
   }
 
@@ -517,9 +643,21 @@ export default function ResourcesPanel({ campaign, isOwner }) {
     )
 
   const linkedIds = new Set(resources.map((r) => `${r.resource_type}:${r.resource_id}`))
-  const grouped = Object.fromEntries(
-    Object.keys(TYPE_ICONS).map((k) => [k, resources.filter((r) => r.resource_type === k)])
-  )
+  const catById = new Map(categories.map((c) => [c.id, c]))
+
+  const sortedCats = [...categories].sort((a, b) => a.sort_order - b.sort_order)
+  const groups = []
+  for (const cat of sortedCats) {
+    const items = resources.filter((r) => r.category_id === cat.id)
+    groups.push({ key: cat.id, label: cat.name, custom: true, icon: cat.icon, items })
+  }
+  for (const type of Object.keys(TYPE_ICONS)) {
+    const items = resources.filter(
+      (r) => r.resource_type === type && (!r.category_id || !catById.has(r.category_id))
+    )
+    if (items.length) groups.push({ key: type, label: TYPE_LABELS[type], type, items })
+  }
+  const visibleGroups = groups.filter((g) => g.items.length > 0 || g.custom)
 
   return (
     <div>
@@ -529,55 +667,56 @@ export default function ResourcesPanel({ campaign, isOwner }) {
           alignItems: 'center',
           justifyContent: 'space-between',
           marginBottom: 16,
+          flexWrap: 'wrap',
+          gap: 8,
         }}
       >
-        <h3 style={{ fontSize: 15, fontWeight: 600 }}>{t('resources.title')}</h3>
+        <h3
+          style={{
+            fontSize: 15,
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <LuBookOpen size={15} /> {t('resources.title')}
+        </h3>
         {isOwner && (
-          <button
-            onClick={() => setAdding(!adding)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '6px 12px',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              color: 'var(--text-dim)',
-              cursor: 'pointer',
-              fontSize: 13,
-            }}
-          >
-            <LuPlus size={14} /> {t('resources.linkResource')}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => setManagingCats(true)} style={panelHeaderBtn}>
+              <LuFolderCog size={14} /> {t('resources.manageCategories')}
+            </button>
+            {!uploadDisabled && (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                style={panelHeaderBtn}
+              >
+                <LuUpload size={14} />{' '}
+                {uploading ? t('resources.uploading') : t('resources.uploadFile')}
+              </button>
+            )}
+            <button onClick={() => setAdding(!adding)} style={panelHeaderBtn}>
+              <LuPlus size={14} /> {t('resources.linkResource')}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFile}
+              style={{ display: 'none' }}
+            />
+          </div>
         )}
       </div>
 
       {adding && isOwner && (
         <ResourcePicker
           campaignId={campaign.id}
-          isGmCampaign={isGmCampaign}
           linkedIds={linkedIds}
           onAdd={() => load()}
           onClose={() => setAdding(false)}
         />
-      )}
-
-      {isOwner && !adding && isGmCampaign && (
-        <div
-          style={{
-            fontSize: 12,
-            color: 'var(--text-muted)',
-            marginBottom: 12,
-            padding: '8px 12px',
-            background: 'var(--bg-deep)',
-            borderRadius: 8,
-            border: '1px solid var(--border)',
-          }}
-        >
-          <LuEye size={12} style={{ verticalAlign: 'middle', marginRight: 5 }} />
-          {t('resources.sharedNote')}
-        </div>
       )}
 
       {resources.length === 0 && !adding ? (
@@ -586,41 +725,115 @@ export default function ResourcesPanel({ campaign, isOwner }) {
           <div style={{ fontSize: 14 }}>{t('resources.noResources')}</div>
         </div>
       ) : (
-        Object.entries(grouped).map(([type, items]) => {
-          if (items.length === 0) return null
-          const { Icon } = TYPE_ICONS[type]
-          const label = TYPE_LABELS[type]
-          return (
-            <section key={type} style={{ marginBottom: 20 }}>
-              <h4
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.07em',
-                  marginBottom: 8,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gap: 20,
+            alignItems: 'start',
+          }}
+        >
+          {visibleGroups.map((g) => {
+            const TypeIcon = g.type ? TYPE_ICONS[g.type].Icon : LuFolder
+            return (
+              <section
+                key={g.key}
+                onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
+                onDrop={isOwner ? () => onDropToGroup(g) : undefined}
+                style={{ marginBottom: 4 }}
               >
-                <Icon size={12} /> {label} ({items.length})
-              </h4>
-              {items.map((r) => (
-                <ResourceRow
-                  key={r.id}
-                  resource={r}
-                  isOwner={isOwner}
-                  isGmCampaign={isGmCampaign}
-                  onRemove={remove}
-                  onToggleShare={toggleShare}
-                />
-              ))}
-            </section>
-          )
-        })
+                <h4
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: 'var(--text-muted)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.07em',
+                    marginBottom: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <CampaignIcon name={g.icon} fallback={TypeIcon} size={12} /> {g.label} (
+                  {g.items.length})
+                </h4>
+                {g.items.length === 0 ? (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: 'var(--text-muted)',
+                      fontStyle: 'italic',
+                      padding: '8px 12px',
+                      border: '1px dashed var(--border)',
+                      borderRadius: 8,
+                    }}
+                  >
+                    {t('resources.emptyCategory')}
+                  </div>
+                ) : (
+                  g.items.map((r) => (
+                    <div
+                      key={r.id}
+                      onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
+                      onDrop={isOwner ? (e) => onDropOnResource(e, r) : undefined}
+                    >
+                      <ResourceRow
+                        campaignId={campaign.id}
+                        resource={r}
+                        isOwner={isOwner}
+                        isGmCampaign={isGmCampaign}
+                        members={members}
+                        categories={categories}
+                        onRemove={remove}
+                        onSetVisibility={setVisibility}
+                        onSetShares={setShares}
+                        onSetCategory={setCategory}
+                        onDragStart={onDragStart}
+                      />
+                    </div>
+                  ))
+                )}
+              </section>
+            )
+          })}
+        </div>
+      )}
+
+      {managingCats && (
+        <CategoryManager
+          campaignId={campaign.id}
+          kind="resource"
+          onClose={() => setManagingCats(false)}
+          onChanged={() => {
+            loadCategories()
+            load()
+          }}
+        />
       )}
     </div>
   )
+}
+
+const selectStyle = {
+  appearance: 'auto',
+  fontSize: 12,
+  padding: '3px 6px',
+  background: 'var(--bg-deep)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  color: 'var(--text-dim)',
+  cursor: 'pointer',
+}
+const panelHeaderBtn = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 5,
+  padding: '6px 12px',
+  background: 'var(--bg-card)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  color: 'var(--text-dim)',
+  cursor: 'pointer',
+  fontSize: 13,
 }

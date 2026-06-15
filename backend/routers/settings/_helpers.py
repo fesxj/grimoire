@@ -46,6 +46,10 @@ _DEFAULTS = {
     "oidc_match_by": "none",  # none | email | username
     "oidc_auto_launch": "false",
     "oidc_auto_register": "false",
+    # Campaign file uploads (admins are exempt from all three). 0 = unlimited.
+    "campaign_uploads_disabled": "false",
+    "campaign_upload_max_file_mb": "0",
+    "campaign_upload_max_total_mb": "0",
 }
 
 _VALID_MATCH_BY = ("none", "email", "username")

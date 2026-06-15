@@ -26,7 +26,7 @@ A Docker-based web application for managing your tabletop RPG PDF collection. Br
 - **Bookmarks** — Per-user page and text-selection bookmarks with inline highlights
 - **Favorites** — Save systems, books, maps, and tokens for quick access
 - **Metadata Editor** — Add descriptions, tags, genre, publisher links, and character builder URLs
-- **Campaigns** — Track GM-run and personal campaigns; session notes, player notes, linked resources, and scheduling
+- **Campaigns** — Track GM-run and personal campaigns; a markdown notes wiki with deep linking, character art and sheets, linked resources, and scheduling
 - **OPDS Catalog** — Each user can generate a personal OPDS feed URL to connect e-reader apps directly to their library
 - **Docker Ready** — One command to run, mount your library directory, done
 - **Responsive** — Works on desktop, tablet, and phone with mobile navigation
@@ -535,10 +535,38 @@ Create additional accounts in **Settings → Users** after logging in as admin.
 
 Grimoire has a built-in campaign tracker with two modes:
 
-- **GM Campaigns** — Created by GMs or admins. Supports player invitations, shared/private resource linking, GM session notes (internal and shared), per-player session notes, and scheduling.
-- **Personal Campaigns** — Private to a single user. Notes expand inline per session. No sharing.
+- **GM Campaigns** — Created by GMs or admins. Supports player invitations, a banner image, character art and character sheets per member (uploaded file or an external link), resource linking with per-resource visibility, a markdown wiki for notes, and scheduling.
+- **Personal Campaigns** — Private to a single user. No sharing.
 
-Campaign members can set a **character name** per campaign (editable by both the GM and the player). Users can also set a **display name** in Account Settings that appears in place of their username across the app.
+Campaign creation uses a short wizard: pick a system, then choose resources — the system's core books are suggested by default and anything can be added (with a search) or removed, each set to **Shared with players**, **GM only**, or **Private**. The campaign **description** supports markdown, and you can name a **custom game system** that isn't in your library (handy for keeping notes on a system you don't own).
+
+Campaign members can set a **character name** per campaign (editable by both the GM and the player), upload **character art** (shown as their avatar) and a **character sheet** (PDF or image). Users can also set a **display name** in Account Settings that appears in place of their username across the app.
+
+### Per-user campaign access
+
+Each user has a **campaign access** toggle (admins manage it per user in **Settings → Users**; enabled by default). Disabling it does **not** delete any existing campaigns — it only:
+
+- Prevents the user from creating campaigns, being added to new ones, and editing/linking resources.
+- Keeps their read access to campaigns they already own or belong to; in member lists they are flagged as **Access disabled**.
+- Locks any campaign they **own** to read-only for everyone (players keep view access, lose all edits) until the owner's access is restored.
+
+When OIDC is configured, this flag can be driven by the provider's [permissions claim](#openid-connect) (`campaignAccess`); a missing key leaves access enabled.
+
+### Notes wiki
+
+Each campaign has a full-page markdown **wiki** (opened from the campaign overview) for building out the world — a place for session recaps, lore, NPCs, and plans:
+
+- **Markdown** with tables, images, and the usual formatting, edited side-by-side with a live preview.
+- **Visibility per page** — *GM only*, *all members*, or *specific members* (e.g. a secret shared with one player).
+- **Groups** — the GM can organize pages into custom groups (e.g. NPCs, Session Notes) in the sidebar.
+- **Page links** — write `[[Page Title]]` to link pages; missing targets are auto-created as stubs, and each page shows what links back to it.
+- **Grimoire embeds** — drop a book (optionally at a page), map, or token straight into a page.
+
+Existing session notes are automatically rolled into wiki pages (under a "Session Notes" group) the first time the new version starts; empty notes are discarded.
+
+**Resources** — link books, maps, and tokens, or upload campaign files (handouts, etc.) the GM keeps with the campaign. Each resource has a visibility: **Public** (all players), **Private** (shared with specific players — e.g. a handout for 2 of 4), or **GM only**. Resources group under their type by default, but the GM can create custom categories (e.g. *Player Handouts*), drag items between categories and reorder them, and delete categories (keeping items uncategorized or unlinking them).
+
+Uploaded campaign files live in the data directory, separate from the library. Admins can disable these uploads app-wide or cap them by per-file and per-campaign size in **Settings → App** (admins themselves are exempt).
 
 ### Session scheduling
 
@@ -571,7 +599,7 @@ Open **Settings → Authentication** as an admin:
 5. (Optional) Configure:
    - **Token Issuer** — the exact `iss` value your IdP puts in tokens. Leave blank to auto-detect from the discovery document. Set this explicitly if auto-detection fails or if your IdP's issuer differs from the Issuer URL (e.g. Authentik application providers). Can also be set via `OIDC_TOKEN_ISSUER`.
    - **Groups Claim** — name of the OIDC claim that contains the user's groups. When set, roles are assigned from groups named (case-insensitively) `admin`, `gm`, or `player`. Highest level wins; users without any matching group are denied access.
-   - **Advanced Permissions Claim** — name of the OIDC claim containing a permissions object for non-admin users. Currently supports `{viewNSFW: bool}`. Missing keys default to `false`. If the entire claim is missing, access is denied.
+   - **Advanced Permissions Claim** — name of the OIDC claim containing a permissions object for non-admin users. Supports `{viewNSFW: bool, campaignAccess: bool}`. A missing `viewNSFW` key defaults to `false`; a missing `campaignAccess` key leaves [campaign access](#per-user-campaign-access) enabled. If the entire claim is missing, access is denied.
    - **Match Existing Users By** — link an existing local account to the OIDC subject by email or username on first login. Subsequent logins always match by stable subject claim.
    - **Auto-launch** — automatically redirect to the IdP when visiting `/login`. Append `?autoLaunch=0` to bypass.
    - **Auto-register** — automatically create local accounts on first OIDC login.

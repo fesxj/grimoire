@@ -1,5 +1,7 @@
 {
-  "_meta": { "nativeName": "Deutsch (DE)" },
+  "_meta": {
+    "nativeName": "Deutsch (DE)"
+  },
   "app": {
     "name": "GRIMOIRE",
     "subtitle": "TTRPG-Bibliothek"
@@ -13,7 +15,9 @@
     "campaigns": "Kampagnen",
     "settings": "Einstellungen",
     "logOut": "Abmelden",
-    "more": "Mehr"
+    "more": "Mehr",
+    "collapseSidebar": null,
+    "expandSidebar": null
   },
   "stats": {
     "systems": "Systeme",
@@ -399,6 +403,14 @@
       "generate": "API-Schlüssel generieren",
       "generating": "Wird generiert…",
       "copyKey": "Schlüssel kopieren"
+    },
+    "campaignUploads": {
+      "title": null,
+      "description": null,
+      "disable": null,
+      "perFile": null,
+      "perCampaign": null,
+      "hint": null
     }
   },
   "users": {
@@ -421,6 +433,9 @@
     "cannotDeleteSelf": "Eigenes Konto kann nicht gelöscht werden",
     "cannotChangeSelfRole": "Eigene Rolle kann nicht geändert werden",
     "allowExplicitTitle": "Explizite Inhalte erlauben",
+    "campaignAccess": "Kampagnen",
+    "campaignAccessTitle": "Diesem Benutzer erlauben, Kampagnen zu erstellen, beizutreten und zu verwalten (wird bei der nächsten Anmeldung von Ihrem OIDC-Anbieter überschrieben, wenn ein campaignAccess-Claim konfiguriert ist)",
+    "failedUpdateCampaignAccess": "Aktualisierung des Kampagnenzugriffs fehlgeschlagen.",
     "setPassword": "Passwort setzen",
     "setPasswordTitle": "Passwort für diesen Benutzer setzen",
     "newPasswordPlaceholder": "Neues Passwort (min. 8)",
@@ -433,7 +448,12 @@
     "failedUpdateRole": "Rolle konnte nicht aktualisiert werden.",
     "failedUpdateExplicit": "Explizit-Einstellung konnte nicht aktualisiert werden.",
     "failedSetPasswordErr": "Passwort konnte nicht gesetzt werden.",
-    "passwordTooShort": "Passwort muss mindestens 8 Zeichen lang sein."
+    "passwordTooShort": "Passwort muss mindestens 8 Zeichen lang sein.",
+    "campaigns": {
+      "toggleLabel": null,
+      "none": null,
+      "loadFailed": null
+    }
   },
   "maintenance": {
     "rescan": {
@@ -533,6 +553,11 @@
   "campaigns": {
     "title": "Kampagnen",
     "newCampaign": "Neue Kampagne",
+    "accessDisabled": "Kampagnenzugriff deaktiviert",
+    "accessDisabledHint": "Ein Administrator hat Ihre Möglichkeit, Kampagnen zu erstellen oder beizutreten, deaktiviert.",
+    "readOnlyLocked": "Diese Kampagne ist schreibgeschützt — der Kampagnenzugriff des SL wurde deaktiviert.",
+    "readOnlySelf": "Ihr Kampagnenzugriff wurde deaktiviert, daher ist diese Kampagne für Sie schreibgeschützt.",
+    "memberAccessDisabled": "Zugriff deaktiviert",
     "noCampaigns": "Noch keine Kampagnen",
     "noCampaignsHint": "Erstelle eine Kampagne, um deine Sitzungen zu verfolgen.",
     "invitations": "Einladungen",
@@ -545,7 +570,9 @@
     "accept": "Annehmen",
     "decline": "Ablehnen",
     "gm": "DM: {{name}}",
-    "unknownGm": "Unbekannt"
+    "unknownGm": "Unbekannt",
+    "nextSession": null,
+    "openNotes": null
   },
   "campaignDetail": {
     "backToCampaigns": "Kampagnen",
@@ -555,7 +582,8 @@
       "overview": "Übersicht",
       "sessionNotes": "Sitzungsnotizen",
       "schedule": "Zeitplan",
-      "resources": "Ressourcen"
+      "resources": "Ressourcen",
+      "notes": null
     },
     "overview": {
       "details": "Details",
@@ -566,11 +594,27 @@
       "personalCampaignType": "Persönliche Kampagne",
       "members": "Mitglieder",
       "invite": "Einladen",
-      "noMembers": "Noch keine Mitglieder. Spieler oben einladen."
+      "noMembers": "Noch keine Mitglieder. Spieler oben einladen.",
+      "gameMaster": null,
+      "players": null,
+      "availability": null,
+      "customDates_one": null,
+      "customDates_other": null
     },
     "edit": "Bearbeiten",
     "deleteAriaLabel": "Kampagne löschen",
-    "deleteConfirm": "Kampagne \"{{name}}\" löschen? Dies kann nicht rückgängig gemacht werden."
+    "deleteConfirm": "Kampagne \"{{name}}\" löschen? Dies kann nicht rückgängig gemacht werden.",
+    "banner": {
+      "empty": null,
+      "upload": null,
+      "replace": null,
+      "remove": null,
+      "suggestedSize": null,
+      "edit": null,
+      "modalTitle": null,
+      "allowedFormats": null
+    },
+    "openNotes": null
   },
   "campaignEditor": {
     "titleNew": "Neue Kampagne",
@@ -589,7 +633,31 @@
     "cancel": "Abbrechen",
     "saveChanges": "Änderungen speichern",
     "createCampaign": "Kampagne erstellen",
-    "saving": "Speichern..."
+    "saving": "Speichern...",
+    "next": null,
+    "back": null,
+    "stepIndicator": null,
+    "resources": {
+      "title": null,
+      "intro": null,
+      "selected": null,
+      "none": null,
+      "suggested": null,
+      "searchPlaceholder": null,
+      "visibilityLabel": null,
+      "visShared": null,
+      "visGm": null,
+      "visPrivate": null
+    },
+    "bannerLabel": null,
+    "bannerChoose": null,
+    "descriptionMarkdownHint": null,
+    "systemCustom": null,
+    "systemCustomPlaceholder": null,
+    "delete": null,
+    "scheduleLabel": null,
+    "scheduleEnabled": null,
+    "scheduleDisabled": null
   },
   "members": {
     "noCharacterName": "Kein Charaktername",
@@ -601,7 +669,14 @@
     "you": "(du)",
     "invitePlayer": "Spieler einladen:",
     "allInvited": "Alle Benutzer wurden bereits eingeladen.",
-    "invite": "Einladen"
+    "invite": "Einladen",
+    "uploadArt": null,
+    "characterSheet": null,
+    "uploadSheet": null,
+    "removeSheet": null,
+    "characterSheetLink": null,
+    "linkSheet": null,
+    "sheetUrlPlaceholder": null
   },
   "sessions": {
     "title": "Sitzungsnotizen",
@@ -718,7 +793,22 @@
     "maps": "Karten",
     "tokens": "Tokens",
     "sharedAriaLabel": "Geteilt — klicken, um privat zu machen",
-    "privateAriaLabel": "Privat — klicken, um mit Spielern zu teilen"
+    "privateAriaLabel": "Privat — klicken, um mit Spielern zu teilen",
+    "visibilityLabel": null,
+    "visShared": null,
+    "visGm": null,
+    "visPrivate": null,
+    "manageCategories": null,
+    "categoryLabel": null,
+    "typeGroup": null,
+    "vis_public": null,
+    "vis_private": null,
+    "vis_gm": null,
+    "files": null,
+    "uploadFile": null,
+    "uploading": null,
+    "emptyCategory": null,
+    "deleteFileConfirm": null
   },
   "download": {
     "title": "Archiv herunterladen",
@@ -850,5 +940,66 @@
     "map": "Karten",
     "handout": "Handouts & Referenz",
     "homebrew": "Homebrew"
+  },
+  "wiki": {
+    "newPage": null,
+    "searchPlaceholder": null,
+    "noPages": null,
+    "selectPrompt": null,
+    "untitled": null,
+    "titleLabel": null,
+    "titlePlaceholder": null,
+    "bodyPlaceholder": null,
+    "markdown": null,
+    "preview": null,
+    "saving": null,
+    "visibilityLabel": null,
+    "vis_gm": null,
+    "vis_group": null,
+    "vis_members": null,
+    "shareWith": null,
+    "noMembers": null,
+    "insertLink": null,
+    "insertEmbed": null,
+    "backlinks": null,
+    "byAuthor": null,
+    "deleteConfirm": null,
+    "emptyPage": null,
+    "missingPageHint": null,
+    "embedPickerTitle": null,
+    "embedSearchPlaceholder": null,
+    "insert": null,
+    "withPage": null,
+    "pageNum": null,
+    "embed_book": null,
+    "embed_map": null,
+    "embed_token": null,
+    "embedBookPage": null,
+    "manageGroups": null,
+    "uncategorized": null,
+    "groupLabel": null,
+    "emptyGroup": null,
+    "iconLabel": null
+  },
+  "campaignNotes": {
+    "backToOverview": null
+  },
+  "campaignCategories": {
+    "titleNotes": null,
+    "titleResources": null,
+    "newPlaceholder": null,
+    "add": null,
+    "none": null,
+    "moveUp": null,
+    "moveDown": null,
+    "deletePrompt": null,
+    "leaveUncategorized": null,
+    "deletePages": null,
+    "unlinkResources": null,
+    "iconLabel": null
+  },
+  "iconPicker": {
+    "label": null,
+    "none": null
   }
 }

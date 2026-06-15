@@ -94,6 +94,7 @@ def auth_me(user: CurrentUser = Depends(get_current_user)):
         if not u:
             raise HTTPException(401, "User no longer exists")
         allow_explicit = u.allow_explicit if u.allow_explicit is not None else True
+        campaign_access = u.campaign_access is None or bool(u.campaign_access)
     finally:
         db.close()
     return {
@@ -103,5 +104,6 @@ def auth_me(user: CurrentUser = Depends(get_current_user)):
         "email": u.email,
         "role": u.role,
         "allow_explicit": allow_explicit,
+        "campaign_access": campaign_access,
         "oidc_linked": bool(u.oidc_subject),
     }

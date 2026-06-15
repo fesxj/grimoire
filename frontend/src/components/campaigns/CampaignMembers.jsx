@@ -1,6 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LuUserPlus, LuUserMinus, LuCheck, LuX, LuUser, LuPencil } from 'react-icons/lu'
+import {
+  LuUserPlus,
+  LuUserMinus,
+  LuCheck,
+  LuX,
+  LuUser,
+  LuPencil,
+  LuImagePlus,
+  LuFileText,
+  LuUpload,
+  LuDownload,
+  LuTrash2,
+  LuLink,
+} from 'react-icons/lu'
 import { campaigns } from '../../api'
 import Spinner from '../Spinner'
 
@@ -8,6 +21,18 @@ const STATUS_COLORS = {
   accepted: 'var(--success, #4caf50)',
   invited: 'var(--gold)',
   declined: 'var(--danger)',
+}
+
+const sheetActionBtn = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 4,
+  background: 'none',
+  border: 'none',
+  cursor: 'pointer',
+  color: 'var(--text-muted)',
+  padding: 0,
+  fontSize: 12,
 }
 
 const smallBtn = (color) => ({
@@ -29,35 +54,117 @@ export function MemberRow({
   onUpdateStatus,
   onSetCharacterName,
   currentUserId,
+  campaignId,
+  onMediaChanged,
 }) {
   const { t } = useTranslation()
   const isCurrentUser = member.user_id === currentUserId
   const isMemberOwner = member.is_owner === true
   const [editingChar, setEditingChar] = useState(false)
   const [charValue, setCharValue] = useState(member.character_name ?? '')
+  const artInputRef = useRef(null)
+  const sheetInputRef = useRef(null)
+  const [busy, setBusy] = useState(false)
+  const [linkingSheet, setLinkingSheet] = useState(false)
+  const [sheetUrlValue, setSheetUrlValue] = useState('')
 
   const displayLabel = member.display_name || member.username
+
+  // A member's art/sheet can be edited by the member themselves or the campaign owner.
+  // Requires the per-membership id (the synthetic owner row has none) and a campaignId.
+  const canEditMedia = !!campaignId && !!member.id && !isMemberOwner && (isCurrentUser || canManage)
 
   const saveCharName = async () => {
     await onSetCharacterName(member.user_id, charValue.trim())
     setEditingChar(false)
   }
 
+  const handleArtFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBusy(true)
+    try {
+      await campaigns.uploadMemberArt(campaignId, member.id, file)
+      onMediaChanged?.()
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleSheetFile = async (e) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBusy(true)
+    try {
+      await campaigns.uploadMemberSheet(campaignId, member.id, file)
+      onMediaChanged?.()
+    } catch (err) {
+      alert(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const removeSheet = async () => {
+    setBusy(true)
+    try {
+      if (member.character_sheet_url) {
+        await campaigns.setCharacterSheetUrl(campaignId, member.user_id, '')
+      } else {
+        await campaigns.deleteMemberSheet(campaignId, member.id)
+      }
+      onMediaChanged?.()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const saveSheetUrl = async () => {
+    const url = sheetUrlValue.trim()
+    if (!url) {
+      setLinkingSheet(false)
+      return
+    }
+    setBusy(true)
+    try {
+      await campaigns.setCharacterSheetUrl(campaignId, member.user_id, url)
+      setLinkingSheet(false)
+      setSheetUrlValue('')
+      onMediaChanged?.()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const hasSheet = member.has_sheet || !!member.character_sheet_url
+
   return (
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 12,
-        padding: '10px 0',
+        gap: 10,
+        padding: '7px 0',
         borderBottom: '1px solid var(--border)',
       }}
     >
-      <div
+      <button
+        type="button"
+        onClick={canEditMedia ? () => artInputRef.current?.click() : undefined}
+        title={canEditMedia ? t('members.uploadArt') : undefined}
+        aria-label={canEditMedia ? t('members.uploadArt') : undefined}
+        disabled={busy}
         style={{
-          width: 32,
-          height: 32,
+          position: 'relative',
+          width: 34,
+          height: 34,
           borderRadius: '50%',
+          overflow: 'hidden',
+          padding: 0,
           background: 'var(--bg-deep)',
           border: `1px solid ${isMemberOwner ? 'var(--gold-dim)' : 'var(--border)'}`,
           display: 'flex',
@@ -67,16 +174,36 @@ export function MemberRow({
           fontSize: 13,
           fontWeight: 600,
           color: isMemberOwner ? 'var(--gold)' : 'var(--text-dim)',
+          cursor: canEditMedia ? 'pointer' : 'default',
         }}
       >
-        {displayLabel?.[0]?.toUpperCase() ?? '?'}
-      </div>
+        {member.has_art && member.id ? (
+          <img
+            src={campaigns.memberArtUrl(campaignId, member.id)}
+            alt={member.character_name || displayLabel}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : canEditMedia ? (
+          <LuImagePlus size={16} aria-hidden="true" />
+        ) : (
+          (displayLabel?.[0]?.toUpperCase() ?? '?')
+        )}
+        {canEditMedia && (
+          <input
+            ref={artInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={handleArtFile}
+            style={{ display: 'none' }}
+          />
+        )}
+      </button>
       <div style={{ flex: 1, minWidth: 0 }}>
         {/* Character name — primary */}
         {isMemberOwner ? (
           <div
             style={{
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: 600,
               color: 'var(--gold)',
               fontFamily: 'Cinzel, serif',
@@ -125,7 +252,7 @@ export function MemberRow({
             {member.character_name ? (
               <span
                 style={{
-                  fontSize: 15,
+                  fontSize: 14,
                   fontWeight: 600,
                   color: 'var(--text)',
                   fontFamily: 'Cinzel, serif',
@@ -191,7 +318,146 @@ export function MemberRow({
           {isCurrentUser && (
             <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>{t('members.you')}</span>
           )}
+          {member.campaign_access === false && (
+            <span
+              style={{
+                fontSize: 11,
+                color: 'var(--danger)',
+                fontWeight: 600,
+                background: 'var(--bg-deep)',
+                border: '1px solid var(--danger)',
+                borderRadius: 10,
+                padding: '1px 6px',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {t('campaigns.memberAccessDisabled')}
+            </span>
+          )}
         </div>
+
+        {/* Character sheet — uploaded file or an external link */}
+        {!isMemberOwner && member.id && (hasSheet || canEditMedia) && (
+          <div
+            style={{
+              marginTop: 5,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontSize: 12,
+              flexWrap: 'wrap',
+            }}
+          >
+            {hasSheet ? (
+              <>
+                <a
+                  href={
+                    member.character_sheet_url || campaigns.memberSheetUrl(campaignId, member.id)
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    color: 'var(--gold)',
+                    textDecoration: 'none',
+                  }}
+                >
+                  <LuFileText size={12} aria-hidden="true" />
+                  {member.character_sheet_url
+                    ? t('members.characterSheetLink')
+                    : member.character_sheet_filename || t('members.characterSheet')}
+                  <LuDownload size={11} aria-hidden="true" />
+                </a>
+                {canEditMedia && (
+                  <button
+                    onClick={removeSheet}
+                    disabled={busy}
+                    aria-label={t('members.removeSheet')}
+                    title={t('members.removeSheet')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--text-muted)',
+                      display: 'flex',
+                      padding: 1,
+                    }}
+                  >
+                    <LuTrash2 size={11} aria-hidden="true" />
+                  </button>
+                )}
+              </>
+            ) : linkingSheet ? (
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <input
+                  value={sheetUrlValue}
+                  onChange={(e) => setSheetUrlValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveSheetUrl()
+                    if (e.key === 'Escape') setLinkingSheet(false)
+                  }}
+                  placeholder={t('members.sheetUrlPlaceholder')}
+                  autoFocus
+                  style={{
+                    fontSize: 12,
+                    padding: '3px 6px',
+                    borderRadius: 5,
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-deep)',
+                    color: 'var(--text)',
+                    width: 200,
+                  }}
+                />
+                <button
+                  onClick={saveSheetUrl}
+                  disabled={busy}
+                  style={{ ...smallBtn('var(--gold)'), padding: '3px 8px' }}
+                >
+                  {t('members.save')}
+                </button>
+                <button
+                  onClick={() => setLinkingSheet(false)}
+                  style={{ ...smallBtn('var(--text-muted)'), padding: '3px 8px' }}
+                >
+                  {t('members.cancel')}
+                </button>
+              </div>
+            ) : (
+              canEditMedia && (
+                <>
+                  <button
+                    onClick={() => sheetInputRef.current?.click()}
+                    disabled={busy}
+                    style={sheetActionBtn}
+                  >
+                    <LuUpload size={11} aria-hidden="true" /> {t('members.uploadSheet')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSheetUrlValue('')
+                      setLinkingSheet(true)
+                    }}
+                    disabled={busy}
+                    style={sheetActionBtn}
+                  >
+                    <LuLink size={11} aria-hidden="true" /> {t('members.linkSheet')}
+                  </button>
+                </>
+              )
+            )}
+            {canEditMedia && (
+              <input
+                ref={sheetInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
+                onChange={handleSheetFile}
+                style={{ display: 'none' }}
+              />
+            )}
+          </div>
+        )}
       </div>
       {!isMemberOwner && (
         <span
@@ -293,10 +559,16 @@ export function InvitePanel({ campaignId, onInvited }) {
             <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 6 }}>
               {u.role}
             </span>
+            {u.campaign_access === false && (
+              <span style={{ fontSize: 12, color: 'var(--danger)', marginLeft: 6 }}>
+                {t('campaigns.memberAccessDisabled')}
+              </span>
+            )}
           </span>
           <button
             onClick={() => invite(u.id)}
-            disabled={loading}
+            disabled={loading || u.campaign_access === false}
+            title={u.campaign_access === false ? t('campaigns.accessDisabledHint') : undefined}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -306,7 +578,8 @@ export function InvitePanel({ campaignId, onInvited }) {
               border: '1px solid var(--border)',
               borderRadius: 6,
               color: 'var(--text-dim)',
-              cursor: 'pointer',
+              cursor: u.campaign_access === false ? 'not-allowed' : 'pointer',
+              opacity: u.campaign_access === false ? 0.5 : 1,
               fontSize: 12,
             }}
           >

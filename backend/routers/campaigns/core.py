@@ -1,8 +1,10 @@
 """Campaign CRUD, member management, and resource linking endpoint handlers."""
 
+import datetime
+
 from fastapi import Depends, HTTPException
 
-from ...auth import CurrentUser, get_current_user
+from ...auth import CurrentUser, get_current_user, require_admin
 from ...config import SessionLocal
 from ...models import (
     Book,
@@ -15,18 +17,18 @@ from ...models import (
 )
 from ._helpers import (
     assert_can_manage,
+    build_members,
     can_view,
     get_campaign_or_404,
     is_gm_or_admin,
     serialize_campaign,
+    user_has_campaign_access,
 )
 from ._schemas import (
     CampaignCreate,
     CampaignUpdate,
     InvitePayload,
     MemberStatusUpdate,
-    ResourceAdd,
-    ResourceUpdate,
 )
 
 
@@ -92,6 +94,8 @@ def create_campaign(data: CampaignCreate, current_user: CurrentUser = Depends(ge
 
     db = SessionLocal()
     try:
+        if not user_has_campaign_access(db, current_user.id):
+            raise HTTPException(403, "Your campaign access has been disabled")
         campaign = Campaign(
             name=data.name.strip(),
             description=data.description,
@@ -100,23 +104,43 @@ def create_campaign(data: CampaignCreate, current_user: CurrentUser = Depends(ge
             gm_title=data.gm_title.strip() if data.gm_title else "Game Master",
             parent_campaign_id=data.parent_campaign_id,
             system_id=data.system_id,
+            # A linked library system takes precedence over a free-text name.
+            system_name=(data.system_name.strip() or None)
+            if data.system_name and not data.system_id
+            else None,
         )
         db.add(campaign)
         db.commit()
         db.refresh(campaign)
 
-        if data.system_id:
-            books = db.query(Book).filter_by(game_system_id=data.system_id).all()
-            SHARED_CATEGORIES = {"core", "character-sheet"}
-            for book in books:
-                db.add(
-                    CampaignResource(
-                        campaign_id=campaign.id,
-                        resource_type="book",
-                        resource_id=book.id,
-                        shared=book.category in SHARED_CATEGORIES,
-                    )
+        # Only link the resources explicitly chosen in the create wizard. Deduplicate
+        # by (type, id) and skip unknown resource types.
+        if data.resources:
+            from ...models import CampaignResourceShare
+
+            seen = set()
+            order = 0
+            for r in data.resources:
+                if r.resource_type not in ("book", "map", "token", "file"):
+                    continue
+                key = (r.resource_type, r.resource_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                visibility = r.visibility if r.visibility in ("public", "private", "gm") else "gm"
+                res = CampaignResource(
+                    campaign_id=campaign.id,
+                    resource_type=r.resource_type,
+                    resource_id=r.resource_id,
+                    visibility=visibility,
+                    sort_order=order,
                 )
+                order += 1
+                db.add(res)
+                db.flush()
+                if visibility == "private" and r.shared_user_ids:
+                    for uid in set(r.shared_user_ids):
+                        db.add(CampaignResourceShare(resource_id=res.id, user_id=uid))
             db.commit()
 
         return serialize_campaign(campaign, [], db)
@@ -131,41 +155,23 @@ def get_campaign(campaign_id: str, current_user: CurrentUser = Depends(get_curre
         if not can_view(c, current_user, db):
             raise HTTPException(403, "Not a member of this campaign")
 
-        rows = db.query(CampaignMember).filter_by(campaign_id=c.id).all()
-        all_users = {u.id: u for u in db.query(User).all()}
-        owner = all_users.get(c.owner_id)
-        members = []
-        if owner:
-            members.append(
-                {
-                    "user_id": c.owner_id,
-                    "username": owner.username,
-                    "display_name": owner.display_name,
-                    "status": "accepted",
-                    "character_name": c.gm_title,
-                    "is_owner": True,
-                }
-            )
-        members += [
-            {
-                "user_id": m.user_id,
-                "username": all_users[m.user_id].username if m.user_id in all_users else "",
-                "display_name": all_users[m.user_id].display_name
-                if m.user_id in all_users
-                else None,
-                "status": m.status,
-                "character_name": m.character_name,
-                "is_owner": False,
-            }
-            for m in rows
-        ]
+        # Record that this campaign was opened, for "recently accessed" sorting.
+        # Use a targeted UPDATE so the ORM onupdate doesn't also bump updated_at
+        # (which would needlessly bust the banner image cache on every open).
+        db.query(Campaign).filter_by(id=c.id).update(
+            {"last_accessed_at": datetime.datetime.utcnow()}
+        )
+        db.commit()
+
+        members = build_members(c, db)
 
         resources = [
             {
                 "id": r.id,
                 "resource_type": r.resource_type,
                 "resource_id": r.resource_id,
-                "shared": r.shared,
+                "visibility": r.visibility,
+                "category_id": r.category_id,
             }
             for r in db.query(CampaignResource).filter_by(campaign_id=campaign_id).all()
         ]
@@ -183,7 +189,7 @@ def update_campaign(
     db = SessionLocal()
     try:
         c = get_campaign_or_404(db, campaign_id)
-        assert_can_manage(c, current_user)
+        assert_can_manage(c, current_user, db)
 
         if data.name is not None:
             c.name = data.name.strip()
@@ -193,12 +199,20 @@ def update_campaign(
             c.gm_title = data.gm_title.strip()
         if data.system_id is not None:
             c.system_id = data.system_id or None
+            if c.system_id:
+                c.system_name = None  # a library system replaces any free-text name
+        if data.system_name is not None:
+            c.system_name = data.system_name.strip() or None
+            if c.system_name:
+                c.system_id = None  # free-text name replaces any linked system
         if data.parent_campaign_id is not None:
             c.parent_campaign_id = data.parent_campaign_id or None
 
         db.commit()
         db.refresh(c)
-        return serialize_campaign(c, [], db)
+        # Return the full member list so the client's merge doesn't blank out
+        # the roster after an edit.
+        return serialize_campaign(c, build_members(c, db), db)
     finally:
         db.close()
 
@@ -207,7 +221,7 @@ def delete_campaign(campaign_id: str, current_user: CurrentUser = Depends(get_cu
     db = SessionLocal()
     try:
         c = get_campaign_or_404(db, campaign_id)
-        assert_can_manage(c, current_user)
+        assert_can_manage(c, current_user, db)
         db.delete(c)
         db.commit()
     finally:
@@ -273,19 +287,50 @@ def search_resources_global(
         db.close()
 
 
+def suggested_resources(system_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    """Books belonging to a game system, for the create wizard's resource step.
+
+    Core-category books are flagged `suggested` so the wizard can pre-select them;
+    nothing else is suggested. Ordered with suggested (core) books first.
+    """
+    db = SessionLocal()
+    try:
+        books = db.query(Book).filter_by(game_system_id=system_id).order_by(Book.title).all()
+        out = [
+            {
+                "resource_type": "book",
+                "resource_id": b.id,
+                "name": b.title,
+                "subtitle": b.category,
+                "has_thumbnail": b.has_thumbnail,
+                "suggested": b.category == "core",
+            }
+            for b in books
+        ]
+        out.sort(key=lambda r: (not r["suggested"], r["name"].lower()))
+        return out
+    finally:
+        db.close()
+
+
 def invite_member(
     campaign_id: str, data: InvitePayload, current_user: CurrentUser = Depends(get_current_user)
 ):
     db = SessionLocal()
     try:
         c = get_campaign_or_404(db, campaign_id)
-        assert_can_manage(c, current_user)
+        assert_can_manage(c, current_user, db)
         if not c.is_gm_campaign:
             raise HTTPException(400, "Only GM campaigns support invitations")
 
         target = db.query(User).filter_by(id=data.user_id).first()
         if not target:
             raise HTTPException(404, "User not found")
+        if not user_has_campaign_access(db, target.id):
+            raise HTTPException(
+                403,
+                "This user's campaign access is disabled and they cannot be added to campaigns",
+            )
 
         existing = (
             db.query(CampaignMember)
@@ -312,7 +357,7 @@ def update_member_status(
     db = SessionLocal()
     try:
         c = get_campaign_or_404(db, campaign_id)
-        is_owner = c.owner_id == current_user.id or is_gm_or_admin(current_user)
+        is_owner = c.owner_id == current_user.id
         if user_id != current_user.id and not is_owner:
             raise HTTPException(403, "Cannot update another member's status")
 
@@ -325,6 +370,10 @@ def update_member_status(
         if data.status is not None:
             if data.status not in ("accepted", "declined"):
                 raise HTTPException(400, "Status must be 'accepted' or 'declined'")
+            # A user whose campaign access is disabled may decline an existing
+            # invitation but cannot join (accept) a campaign.
+            if data.status == "accepted" and not user_has_campaign_access(db, member.user_id):
+                raise HTTPException(403, "Your campaign access has been disabled")
             member.status = data.status
 
         if data.character_name is not None:
@@ -334,11 +383,24 @@ def update_member_status(
                 )
             member.character_name = data.character_name.strip() or None
 
+        if data.character_sheet_url is not None:
+            if not is_owner and user_id != current_user.id:
+                raise HTTPException(
+                    403, "Only the GM or the member themselves can set a character sheet link"
+                )
+            url = data.character_sheet_url.strip()
+            member.character_sheet_url = url or None
+            if url:
+                # A link replaces any uploaded sheet file.
+                member.character_sheet_path = None
+                member.character_sheet_filename = None
+
         db.commit()
         return {
             "user_id": user_id,
             "status": member.status,
             "character_name": member.character_name,
+            "character_sheet_url": member.character_sheet_url,
         }
     finally:
         db.close()
@@ -350,11 +412,7 @@ def remove_member(
     db = SessionLocal()
     try:
         c = get_campaign_or_404(db, campaign_id)
-        if (
-            user_id != current_user.id
-            and c.owner_id != current_user.id
-            and current_user.role != "admin"
-        ):
+        if user_id != current_user.id and c.owner_id != current_user.id:
             raise HTTPException(403, "Not authorised")
 
         member = (
@@ -367,129 +425,33 @@ def remove_member(
         db.close()
 
 
-def list_resources(campaign_id: str, current_user: CurrentUser = Depends(get_current_user)):
+
+def admin_list_user_campaigns(user_id: str, current_user: CurrentUser = Depends(require_admin)):
+    """Return a minimal read-only view of all campaigns owned by a specific user.
+
+    Admins can inspect (but not manage or delete) campaigns through the user page.
+    Only the title, game system, and description are exposed.
+    """
     db = SessionLocal()
     try:
-        c = get_campaign_or_404(db, campaign_id)
-        if not can_view(c, current_user, db):
-            raise HTTPException(403, "Not a member of this campaign")
+        from ...models import GameSystem
 
-        is_owner = c.owner_id == current_user.id or current_user.role == "admin"
-        resources = db.query(CampaignResource).filter_by(campaign_id=campaign_id).all()
-
-        def _resource_name(rtype: str, rid: str) -> str:
-            if rtype == "book":
-                obj = db.query(Book).filter_by(id=rid).first()
-                return obj.title if obj else rid
-            if rtype == "map":
-                obj = db.query(GenericMap).filter_by(id=rid).first()
-                return obj.filename if obj else rid
-            if rtype == "token":
-                obj = db.query(Token).filter_by(id=rid).first()
-                return obj.filename if obj else rid
-            return rid
-
+        user = db.query(User).filter_by(id=user_id).first()
+        if not user:
+            raise HTTPException(404, "User not found")
+        owned = db.query(Campaign).filter_by(owner_id=user_id).all()
+        system_names = {s.id: s.name for s in db.query(GameSystem).all()}
         return [
             {
-                "id": r.id,
-                "resource_type": r.resource_type,
-                "resource_id": r.resource_id,
-                "name": _resource_name(r.resource_type, r.resource_id),
-                "shared": r.shared,
+                "id": c.id,
+                "name": c.name,
+                "description": c.description,
+                "is_gm_campaign": c.is_gm_campaign,
+                "system_id": c.system_id,
+                "system_name": system_names.get(c.system_id),
             }
-            for r in resources
-            if is_owner or r.shared
+            for c in owned
         ]
-    finally:
-        db.close()
-
-
-def add_resource(
-    campaign_id: str, data: ResourceAdd, current_user: CurrentUser = Depends(get_current_user)
-):
-    db = SessionLocal()
-    try:
-        c = get_campaign_or_404(db, campaign_id)
-        assert_can_manage(c, current_user)
-        if data.resource_type not in ("book", "map", "token"):
-            raise HTTPException(400, "Invalid resource_type")
-
-        existing = (
-            db.query(CampaignResource)
-            .filter_by(
-                campaign_id=campaign_id,
-                resource_type=data.resource_type,
-                resource_id=data.resource_id,
-            )
-            .first()
-        )
-        if existing:
-            raise HTTPException(409, "Resource already linked")
-
-        res = CampaignResource(
-            campaign_id=campaign_id,
-            resource_type=data.resource_type,
-            resource_id=data.resource_id,
-            shared=data.shared,
-        )
-        db.add(res)
-        db.commit()
-        db.refresh(res)
-
-        def _name(rtype, rid):
-            if rtype == "book":
-                obj = db.query(Book).filter_by(id=rid).first()
-                return obj.title if obj else rid
-            if rtype == "map":
-                obj = db.query(GenericMap).filter_by(id=rid).first()
-                return obj.filename if obj else rid
-            if rtype == "token":
-                obj = db.query(Token).filter_by(id=rid).first()
-                return obj.filename if obj else rid
-            return rid
-
-        return {
-            "id": res.id,
-            "resource_type": res.resource_type,
-            "resource_id": res.resource_id,
-            "name": _name(res.resource_type, res.resource_id),
-            "shared": res.shared,
-        }
-    finally:
-        db.close()
-
-
-def update_resource(
-    campaign_id: str,
-    resource_id: str,
-    data: ResourceUpdate,
-    current_user: CurrentUser = Depends(get_current_user),
-):
-    db = SessionLocal()
-    try:
-        c = get_campaign_or_404(db, campaign_id)
-        assert_can_manage(c, current_user)
-        res = db.query(CampaignResource).filter_by(id=resource_id, campaign_id=campaign_id).first()
-        if not res:
-            raise HTTPException(404, "Resource not found")
-        res.shared = data.shared
-        db.commit()
-        return {"id": res.id, "shared": res.shared}
-    finally:
-        db.close()
-
-
-def remove_resource(
-    campaign_id: str, resource_id: str, current_user: CurrentUser = Depends(get_current_user)
-):
-    db = SessionLocal()
-    try:
-        c = get_campaign_or_404(db, campaign_id)
-        assert_can_manage(c, current_user)
-        res = db.query(CampaignResource).filter_by(id=resource_id, campaign_id=campaign_id).first()
-        if res:
-            db.delete(res)
-            db.commit()
     finally:
         db.close()
 
@@ -498,7 +460,7 @@ def eligible_members(campaign_id: str, current_user: CurrentUser = Depends(get_c
     db = SessionLocal()
     try:
         c = get_campaign_or_404(db, campaign_id)
-        assert_can_manage(c, current_user)
+        assert_can_manage(c, current_user, db)
 
         existing = {
             m.user_id for m in db.query(CampaignMember).filter_by(campaign_id=campaign_id).all()
@@ -511,6 +473,7 @@ def eligible_members(campaign_id: str, current_user: CurrentUser = Depends(get_c
                 "display_name": u.display_name,
                 "role": u.role,
                 "already_invited": u.id in existing,
+                "campaign_access": u.campaign_access is None or bool(u.campaign_access),
             }
             for u in users
         ]

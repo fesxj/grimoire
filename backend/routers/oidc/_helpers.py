@@ -320,6 +320,8 @@ def _resolve_user(db, claims: dict, eff: dict) -> User:
     if perms is not None:
         if "viewNSFW" in perms:
             user.allow_explicit = bool(perms["viewNSFW"])
+        if "campaignAccess" in perms:
+            user.campaign_access = bool(perms["campaignAccess"])
 
     db.commit()
     db.refresh(user)

@@ -19,8 +19,14 @@ DATA_PATH = os.environ.get("DATA_PATH", "./data")
 DB_PATH = os.path.join(DATA_PATH, "grimoire.db")
 THUMB_DIR = os.path.join(DATA_PATH, "thumbnails")
 PAGE_CACHE_DIR = os.path.join(DATA_PATH, "page_cache")
+CAMPAIGN_UPLOAD_DIR = os.path.join(DATA_PATH, "campaign_uploads")
 VALKEY_URL = os.environ.get("VALKEY_URL", "")
 _PAGE_CACHE_HEADERS = {"Cache-Control": "max-age=31536000, immutable"}
+
+# When true, non-admin users cannot change their own password via /users/me/password.
+# Admins can still reset any user's password via /users/{user_id}.
+# Intended for OIDC-only deployments where passwords are managed externally.
+DISABLE_PASSWORD_CHANGE = os.environ.get("DISABLE_PASSWORD_CHANGE", "false").lower() == "true"
 
 # Optional override for password authentication. When the env var is set,
 # it pins the value and the admin UI shows a read-only state. When unset,
@@ -184,6 +190,10 @@ os.makedirs(THUMB_DIR, exist_ok=True)
 os.makedirs(os.path.join(THUMB_DIR, "books"), exist_ok=True)
 os.makedirs(os.path.join(THUMB_DIR, "maps"), exist_ok=True)
 os.makedirs(PAGE_CACHE_DIR, exist_ok=True)
+os.makedirs(os.path.join(CAMPAIGN_UPLOAD_DIR, "banners"), exist_ok=True)
+os.makedirs(os.path.join(CAMPAIGN_UPLOAD_DIR, "art"), exist_ok=True)
+os.makedirs(os.path.join(CAMPAIGN_UPLOAD_DIR, "sheets"), exist_ok=True)
+os.makedirs(os.path.join(CAMPAIGN_UPLOAD_DIR, "files"), exist_ok=True)
 
 engine, SessionLocal = init_db(DB_PATH)
 

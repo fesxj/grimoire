@@ -557,6 +557,58 @@ class TestResolveUser:
         finally:
             db.close()
 
+    def test_permissions_claim_applies_campaign_access(self, client, admin_setup):
+        from backend.config import SessionLocal
+        db = SessionLocal()
+        try:
+            user = _resolve_user(
+                db,
+                {
+                    "sub": "perm-campaign-sub",
+                    "preferred_username": "perm_campaign",
+                    "perms": {"campaignAccess": False},
+                },
+                self._eff(oidc_permissions_claim="perms", oidc_auto_register=True),
+            )
+            assert user.campaign_access is False
+            # Re-login with the claim flipped back on re-enables access.
+            user = _resolve_user(
+                db,
+                {
+                    "sub": "perm-campaign-sub",
+                    "preferred_username": "perm_campaign",
+                    "perms": {"campaignAccess": True},
+                },
+                self._eff(oidc_permissions_claim="perms"),
+            )
+            assert user.campaign_access is True
+            db.delete(user)
+            db.commit()
+        finally:
+            db.close()
+
+    def test_permissions_claim_absent_key_leaves_campaign_access_default(
+        self, client, admin_setup
+    ):
+        from backend.config import SessionLocal
+        db = SessionLocal()
+        try:
+            # perms present but without campaignAccess → default (enabled) preserved.
+            user = _resolve_user(
+                db,
+                {
+                    "sub": "perm-no-campaign-sub",
+                    "preferred_username": "perm_no_campaign",
+                    "perms": {"viewNSFW": True},
+                },
+                self._eff(oidc_permissions_claim="perms", oidc_auto_register=True),
+            )
+            assert user.campaign_access is None or user.campaign_access is True
+            db.delete(user)
+            db.commit()
+        finally:
+            db.close()
+
     def test_re_login_resyncs_role_from_groups(self, client, admin_setup):
         from backend.config import SessionLocal
         from backend.models import User

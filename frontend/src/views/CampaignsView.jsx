@@ -9,11 +9,14 @@ import {
   LuLink,
   LuChevronRight,
   LuMailOpen,
+  LuCalendar,
+  LuNotebook,
 } from 'react-icons/lu'
 import { campaigns } from '../api'
 import { useAuth } from '../context/AuthContext'
 import Spinner from '../components/Spinner'
 import CampaignEditor from '../components/campaigns/CampaignEditor'
+import WikiMarkdown from '../components/campaigns/WikiMarkdown'
 
 function RoleBadge({ label }) {
   return (
@@ -35,12 +38,34 @@ function RoleBadge({ label }) {
   )
 }
 
-function CampaignCard({ campaign, onClick, userId, badgeLabel, subtitle }) {
+function formatSessionDate(dateStr) {
+  if (!dateStr) return ''
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+// Responsive grid: cards fill the available width, reflowing from one column on
+// narrow screens to several when wide.
+const CARD_GRID = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+  gap: 14,
+  alignItems: 'start',
+}
+
+function CampaignCard({ campaign, onClick, onOpenNotes, userId, badgeLabel, subtitle }) {
   const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
   const acceptedCount =
     campaign.members?.filter((m) => m.status === 'accepted' && !m.is_owner).length ?? 0
   const isOwner = campaign.owner_id === userId
+  // Cache-bust the banner with updated_at so a re-upload shows without a stale image.
+  const bannerSrc = campaign.has_banner
+    ? `${campaigns.bannerUrl(campaign.id)}&v=${encodeURIComponent(campaign.updated_at)}`
+    : null
 
   return (
     <div
@@ -64,99 +89,154 @@ function CampaignCard({ campaign, onClick, userId, badgeLabel, subtitle }) {
         transition: 'all 0.15s',
         transform: hovered ? 'translateY(-1px)' : 'none',
         boxShadow: hovered ? '0 4px 16px rgba(0,0,0,0.25)' : 'none',
-        padding: '20px 22px',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 16,
+        overflow: 'hidden',
       }}
     >
+      {/* Banner header */}
       <div
         style={{
-          width: 44,
-          height: 44,
-          borderRadius: 10,
-          flexShrink: 0,
+          height: 96,
           background: 'var(--bg-deep)',
+          borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          border: '1px solid var(--border)',
+          position: 'relative',
         }}
       >
-        <LuScroll size={20} color="var(--gold)" />
+        {bannerSrc ? (
+          <img
+            src={bannerSrc}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+          />
+        ) : (
+          <LuScroll size={28} color="var(--gold)" style={{ opacity: 0.5 }} />
+        )}
       </div>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            marginBottom: 6,
-            flexWrap: 'wrap',
-          }}
-        >
-          <span
+      {/* Content */}
+      <div style={{ padding: '16px 18px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
             style={{
-              fontSize: 17,
-              fontWeight: 600,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              marginBottom: 6,
+              flexWrap: 'wrap',
             }}
           >
-            {campaign.name}
-          </span>
-          {badgeLabel && <RoleBadge label={badgeLabel} />}
-          {campaign.parent_campaign_id && (
             <span
               style={{
-                fontSize: 11,
-                color: 'var(--text-muted)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
+                fontSize: 17,
+                fontWeight: 600,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
-              <LuLink size={11} aria-hidden="true" /> {t('campaigns.linkedToGmCampaign')}
+              {campaign.name}
             </span>
-          )}
-        </div>
+            {badgeLabel && <RoleBadge label={badgeLabel} />}
+            {campaign.parent_campaign_id && (
+              <span
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <LuLink size={11} aria-hidden="true" /> {t('campaigns.linkedToGmCampaign')}
+              </span>
+            )}
+          </div>
 
-        {campaign.description && (
-          <p
+          {campaign.description && (
+            <div
+              // Scrollable markdown preview, capped near the banner height so a
+              // long description doesn't push the meta row (type/system/schedule)
+              // out of view. Clicks inside don't open the campaign.
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              style={{
+                fontSize: 13,
+                color: 'var(--text-dim)',
+                lineHeight: 1.5,
+                maxHeight: 96,
+                overflowY: 'auto',
+                marginBottom: 10,
+              }}
+            >
+              <WikiMarkdown body={campaign.description} />
+            </div>
+          )}
+
+          <div
             style={{
-              fontSize: 13,
-              color: 'var(--text-dim)',
-              lineHeight: 1.5,
-              overflow: 'hidden',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              marginBottom: 10,
+              display: 'flex',
+              gap: 16,
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              flexWrap: 'wrap',
             }}
           >
-            {campaign.description}
-          </p>
-        )}
+            {subtitle && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <LuUser size={12} aria-hidden="true" />
+                {subtitle}
+              </span>
+            )}
+            {isOwner && campaign.is_gm_campaign && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <LuUsers size={12} aria-hidden="true" />
+                {t('campaigns.players', { count: acceptedCount })}
+              </span>
+            )}
+            {campaign.next_session && (
+              <span
+                style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--gold)' }}
+                title={t('campaigns.nextSession')}
+              >
+                <LuCalendar size={12} aria-hidden="true" />
+                {formatSessionDate(campaign.next_session)}
+              </span>
+            )}
+          </div>
 
-        <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-muted)' }}>
-          {subtitle && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <LuUser size={12} aria-hidden="true" />
-              {subtitle}
-            </span>
-          )}
-          {isOwner && campaign.is_gm_campaign && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <LuUsers size={12} aria-hidden="true" />
-              {t('campaigns.players', { count: acceptedCount })}
-            </span>
-          )}
+          {/* Jump straight to this campaign's notes without opening the overview. */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onOpenNotes()
+            }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              marginTop: 12,
+              padding: '5px 10px',
+              background: 'var(--bg-deep)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              color: 'var(--text-dim)',
+              cursor: 'pointer',
+              fontSize: 12,
+            }}
+          >
+            <LuNotebook size={13} aria-hidden="true" /> {t('campaigns.openNotes')}
+          </button>
         </div>
-      </div>
 
-      <LuChevronRight size={18} color="var(--text-muted)" style={{ flexShrink: 0, marginTop: 4 }} />
+        <LuChevronRight
+          size={18}
+          color="var(--text-muted)"
+          style={{ flexShrink: 0, marginTop: 4 }}
+        />
+      </div>
     </div>
   )
 }
@@ -170,6 +250,8 @@ export default function CampaignsView() {
   const [error, setError] = useState(null)
 
   const isGmOrAdmin = user?.role === 'admin' || user?.role === 'gm'
+  // campaign_access defaults to enabled when the field is absent (older tokens).
+  const canCreate = user?.campaign_access !== false
 
   const load = () => {
     campaigns
@@ -182,8 +264,14 @@ export default function CampaignsView() {
     load()
   }, [])
 
+  // Most recently accessed (by any user) first; campaigns never opened fall last.
+  const byRecentAccess = (a, b) =>
+    (b.last_accessed_at || '').localeCompare(a.last_accessed_at || '')
+
   const invitations = list?.filter((c) => c.invitation_status === 'invited') ?? []
-  const accepted = list?.filter((c) => c.invitation_status !== 'invited') ?? []
+  const accepted = (list?.filter((c) => c.invitation_status !== 'invited') ?? []).sort(
+    byRecentAccess
+  )
   const gmCampaigns = accepted.filter((c) => c.owner_id === user?.id && c.is_gm_campaign)
   const personalCampaigns = accepted.filter((c) => c.owner_id === user?.id && !c.is_gm_campaign)
   const joinedCampaigns = accepted.filter((c) => c.owner_id !== user?.id)
@@ -194,7 +282,7 @@ export default function CampaignsView() {
   }
 
   return (
-    <div className="fade-in" style={{ padding: 24, maxWidth: 900, margin: '0 auto' }}>
+    <div className="fade-in" style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
       <div
         style={{
           display: 'flex',
@@ -208,24 +296,33 @@ export default function CampaignsView() {
         >
           <LuScroll size={20} color="var(--gold)" /> {t('campaigns.title')}
         </h2>
-        <button
-          onClick={() => setShowEditor(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '8px 16px',
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: 8,
-            color: 'var(--text-dim)',
-            cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 500,
-          }}
-        >
-          <LuPlus size={16} /> {t('campaigns.newCampaign')}
-        </button>
+        {canCreate ? (
+          <button
+            onClick={() => setShowEditor(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '8px 16px',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
+              borderRadius: 8,
+              color: 'var(--text-dim)',
+              cursor: 'pointer',
+              fontSize: 14,
+              fontWeight: 500,
+            }}
+          >
+            <LuPlus size={16} /> {t('campaigns.newCampaign')}
+          </button>
+        ) : (
+          <span
+            title={t('campaigns.accessDisabledHint')}
+            style={{ fontSize: 13, color: 'var(--text-dim)', fontStyle: 'italic' }}
+          >
+            {t('campaigns.accessDisabled')}
+          </span>
+        )}
       </div>
 
       {error && (
@@ -380,13 +477,14 @@ export default function CampaignsView() {
               >
                 {t('campaigns.gmCampaigns')}
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={CARD_GRID}>
                 {gmCampaigns.map((c) => (
                   <CampaignCard
                     key={c.id}
                     campaign={c}
                     userId={user?.id}
                     onClick={() => navigate(`/campaigns/${c.id}`)}
+                    onOpenNotes={() => navigate(`/campaigns/${c.id}/notes`)}
                     subtitle={c.gm_title}
                   />
                 ))}
@@ -408,13 +506,14 @@ export default function CampaignsView() {
               >
                 {t('campaigns.joinedCampaigns')}
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={CARD_GRID}>
                 {joinedCampaigns.map((c) => (
                   <CampaignCard
                     key={c.id}
                     campaign={c}
                     userId={user?.id}
                     onClick={() => navigate(`/campaigns/${c.id}`)}
+                    onOpenNotes={() => navigate(`/campaigns/${c.id}/notes`)}
                     subtitle={t('campaigns.gm', {
                       name: c.owner_display_name || t('campaigns.unknownGm'),
                     })}
@@ -438,13 +537,14 @@ export default function CampaignsView() {
               >
                 {t('campaigns.personalCampaigns')}
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={CARD_GRID}>
                 {personalCampaigns.map((c) => (
                   <CampaignCard
                     key={c.id}
                     campaign={c}
                     userId={user?.id}
                     onClick={() => navigate(`/campaigns/${c.id}`)}
+                    onOpenNotes={() => navigate(`/campaigns/${c.id}/notes`)}
                   />
                 ))}
               </div>

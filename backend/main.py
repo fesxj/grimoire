@@ -106,6 +106,16 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    from . import wiki_migration
+
+    db = SessionLocal()
+    try:
+        wiki_migration.migrate(db)
+    except Exception as e:
+        logger.error(f"Wiki migration error: {e}")
+    finally:
+        db.close()
+
     if not os.getenv("PYTEST_CURRENT_TEST"):
         db = SessionLocal()
         try:

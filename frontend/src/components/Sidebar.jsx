@@ -11,6 +11,8 @@ import {
   LuHeart,
   LuScroll,
   LuX,
+  LuPanelLeftClose,
+  LuPanelLeftOpen,
 } from 'react-icons/lu'
 import AboutModal from './AboutModal'
 
@@ -53,7 +55,14 @@ function isNewer(latestVersion, currentVersion) {
   return lPat > cPat
 }
 
-export default function Sidebar({ stats, user, onLogout, uiSettings = {} }) {
+export default function Sidebar({
+  stats,
+  user,
+  onLogout,
+  uiSettings = {},
+  collapsed = false,
+  onToggleCollapse,
+}) {
   const { t } = useTranslation()
   const hide_maps = uiSettings.hide_maps
   const hide_tokens = uiSettings.hide_tokens
@@ -98,11 +107,24 @@ export default function Sidebar({ stats, user, onLogout, uiSettings = {} }) {
     show_stat_tokens ||
     show_stat_size
 
+  const navItem = (to, icon, label, { end = true } = {}) => (
+    <NavLink
+      to={to}
+      end={end}
+      title={collapsed ? label : undefined}
+      aria-label={collapsed ? label : undefined}
+      style={({ isActive }) => navLinkStyle(isActive, collapsed)}
+    >
+      {icon}
+      {!collapsed && label}
+    </NavLink>
+  )
+
   return (
     <div
       style={{
-        width: 220,
-        minWidth: 220,
+        width: collapsed ? 64 : 220,
+        minWidth: collapsed ? 64 : 220,
         background: 'var(--bg-panel)',
         borderRight: '1px solid var(--border)',
         display: 'flex',
@@ -110,15 +132,17 @@ export default function Sidebar({ stats, user, onLogout, uiSettings = {} }) {
         height: '100vh',
         position: 'sticky',
         top: 0,
+        transition: 'width 0.15s ease, min-width 0.15s ease',
       }}
     >
       {/* Logo */}
       <div
         style={{
-          padding: '12px 4px',
+          padding: collapsed ? '12px 0' : '12px 4px',
           borderBottom: '1px solid var(--border)',
           display: 'flex',
           alignItems: 'center',
+          justifyContent: collapsed ? 'center' : 'flex-start',
           gap: 12,
         }}
       >
@@ -126,62 +150,72 @@ export default function Sidebar({ stats, user, onLogout, uiSettings = {} }) {
           src="/android-chrome-192x192.png"
           alt=""
           aria-hidden="true"
-          width={72}
-          height={72}
+          width={collapsed ? 40 : 72}
+          height={collapsed ? 40 : 72}
           style={{ borderRadius: 12, flexShrink: 0 }}
         />
-        <div>
-          <h1 style={{ fontSize: 20, letterSpacing: '0.08em', margin: 0, lineHeight: 1.1 }}>
-            {t('app.name')}
-          </h1>
-          <div
-            style={{
-              fontSize: 11,
-              color: 'var(--text-muted)',
-              marginTop: 3,
-              fontWeight: 300,
-              letterSpacing: '0.15em',
-              textTransform: 'uppercase',
-            }}
-          >
-            {t('app.subtitle')}
+        {!collapsed && (
+          <div>
+            <h1 style={{ fontSize: 20, letterSpacing: '0.08em', margin: 0, lineHeight: 1.1 }}>
+              {t('app.name')}
+            </h1>
+            <div
+              style={{
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                marginTop: 3,
+                fontWeight: 300,
+                letterSpacing: '0.15em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {t('app.subtitle')}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav aria-label="Main navigation" style={{ padding: '12px 8px', flex: 1 }}>
-        <NavLink to="/library" end={false} style={({ isActive }) => navLinkStyle(isActive)}>
-          <LuLibrary size={16} /> {t('nav.library')}
-        </NavLink>
-        {!hide_maps && (
-          <NavLink to="/maps" end style={({ isActive }) => navLinkStyle(isActive)}>
-            <LuMap size={16} /> {t('nav.maps')}
-          </NavLink>
-        )}
-        {!hide_tokens && (
-          <NavLink to="/tokens" end style={({ isActive }) => navLinkStyle(isActive)}>
-            <LuUser size={16} /> {t('nav.tokens')}
-          </NavLink>
-        )}
-        <NavLink to="/search" end style={({ isActive }) => navLinkStyle(isActive)}>
-          <LuSearch size={16} /> {t('nav.search')}
-        </NavLink>
+      <nav
+        aria-label="Main navigation"
+        style={{ padding: collapsed ? '12px 8px' : '12px 8px', flex: 1 }}
+      >
+        {navItem('/library', <LuLibrary size={16} />, t('nav.library'), { end: false })}
+        {!hide_maps && navItem('/maps', <LuMap size={16} />, t('nav.maps'))}
+        {!hide_tokens && navItem('/tokens', <LuUser size={16} />, t('nav.tokens'))}
+        {navItem('/search', <LuSearch size={16} />, t('nav.search'))}
 
         <div style={{ margin: '12px 8px 8px', borderTop: '1px solid var(--border)' }} />
 
-        <NavLink to="/favorites" end style={({ isActive }) => navLinkStyle(isActive)}>
-          <LuHeart size={16} /> {t('nav.favorites')}
-        </NavLink>
-        {!hide_campaigns && (
-          <NavLink to="/campaigns" end style={({ isActive }) => navLinkStyle(isActive)}>
-            <LuScroll size={16} /> {t('nav.campaigns')}
-          </NavLink>
-        )}
+        {navItem('/favorites', <LuHeart size={16} />, t('nav.favorites'))}
+        {!hide_campaigns && navItem('/campaigns', <LuScroll size={16} />, t('nav.campaigns'))}
       </nav>
 
+      {/* Collapse toggle — bottom of the nav section, above the stats footer */}
+      <button
+        onClick={onToggleCollapse}
+        title={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
+        aria-label={collapsed ? t('nav.expandSidebar') : t('nav.collapseSidebar')}
+        aria-expanded={!collapsed}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: collapsed ? 'center' : 'flex-end',
+          gap: 6,
+          background: 'none',
+          border: 'none',
+          borderTop: '1px solid var(--border)',
+          color: 'var(--text-muted)',
+          cursor: 'pointer',
+          padding: collapsed ? '8px 0' : '8px 16px',
+          fontSize: 12,
+        }}
+      >
+        {collapsed ? <LuPanelLeftOpen size={16} /> : <LuPanelLeftClose size={16} />}
+      </button>
+
       {/* Stats footer */}
-      {stats && anyStats && (
+      {!collapsed && stats && anyStats && (
         <div
           style={{
             padding: '16px 20px',
@@ -235,7 +269,7 @@ export default function Sidebar({ stats, user, onLogout, uiSettings = {} }) {
         </div>
       )}
 
-      {stats && (
+      {!collapsed && stats && (
         <div style={{ borderTop: '1px solid var(--border)' }}>
           <button
             onClick={() => setShowAbout(true)}
@@ -314,36 +348,40 @@ export default function Sidebar({ stats, user, onLogout, uiSettings = {} }) {
       {user && (
         <div
           style={{
-            padding: '12px 20px',
+            padding: collapsed ? '12px 0' : '12px 20px',
             borderTop: '1px solid var(--border)',
             display: 'flex',
+            flexDirection: collapsed ? 'column' : 'row',
             alignItems: 'center',
-            gap: 10,
+            justifyContent: 'center',
+            gap: collapsed ? 8 : 10,
           }}
         >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: 13,
-                fontWeight: 500,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {user.display_name || user.username}
+          {!collapsed && (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {user.display_name || user.username}
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: 'var(--text-muted)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                {user.role}
+              </div>
             </div>
-            <div
-              style={{
-                fontSize: 13,
-                color: 'var(--text-muted)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-              }}
-            >
-              {user.role}
-            </div>
-          </div>
+          )}
           <NavLink
             to="/settings"
             title={t('nav.settings')}
@@ -394,12 +432,13 @@ export default function Sidebar({ stats, user, onLogout, uiSettings = {} }) {
   )
 }
 
-const navLinkStyle = (active) => ({
+const navLinkStyle = (active, collapsed = false) => ({
   display: 'flex',
   alignItems: 'center',
-  gap: 12,
+  justifyContent: collapsed ? 'center' : 'flex-start',
+  gap: collapsed ? 0 : 12,
   width: '100%',
-  padding: '10px 14px',
+  padding: collapsed ? '10px 0' : '10px 14px',
   borderRadius: 8,
   marginBottom: 2,
   background: active ? 'var(--bg-card)' : 'transparent',

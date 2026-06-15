@@ -1,5 +1,7 @@
 {
-  "_meta": { "nativeName": "English (US)" },
+  "_meta": {
+    "nativeName": "English (US)"
+  },
   "app": {
     "name": "GRIMOIRE",
     "subtitle": "TTRPG Library"
@@ -13,7 +15,9 @@
     "campaigns": "Campaigns",
     "settings": "Settings",
     "logOut": "Log out",
-    "more": "More"
+    "more": "More",
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar"
   },
   "stats": {
     "systems": "Systems",
@@ -461,6 +465,14 @@
       "generate": "Generate API Key",
       "generating": "Generating…",
       "copyKey": "Copy key"
+    },
+    "campaignUploads": {
+      "title": "Campaign Uploads",
+      "description": "Control GM-uploaded files attached to campaigns. You (admin) are exempt from these limits.",
+      "disable": "Disable campaign file uploads for non-admins",
+      "perFile": "Max file size (MB, 0 = unlimited)",
+      "perCampaign": "Max total per campaign (MB, 0 = unlimited)",
+      "hint": "Files are stored in the data directory, separate from the library."
     }
   },
   "users": {
@@ -483,6 +495,9 @@
     "cannotDeleteSelf": "Cannot delete your own account",
     "cannotChangeSelfRole": "Cannot change your own role",
     "allowExplicitTitle": "Allow explicit content",
+    "campaignAccess": "Campaigns",
+    "campaignAccessTitle": "Allow this user to create, join, and manage campaigns (overridden by your OIDC provider on next login if a campaignAccess claim is configured)",
+    "failedUpdateCampaignAccess": "Failed to update campaign access.",
     "setPassword": "Set Password",
     "setPasswordTitle": "Set password for this user",
     "newPasswordPlaceholder": "New password (min 8)",
@@ -501,7 +516,12 @@
     "noEmail": "no email",
     "editEmail": "Edit email",
     "failedSetEmail": "Failed to update email.",
-    "oidcLinkedTitle": "This account is linked to an OpenID Connect identity provider."
+    "oidcLinkedTitle": "This account is linked to an OpenID Connect identity provider.",
+    "campaigns": {
+      "toggleLabel": "Campaigns",
+      "none": "No campaigns.",
+      "loadFailed": "Failed to load campaigns."
+    }
   },
   "maintenance": {
     "rescan": {
@@ -601,6 +621,11 @@
   "campaigns": {
     "title": "Campaigns",
     "newCampaign": "New Campaign",
+    "accessDisabled": "Campaign access disabled",
+    "accessDisabledHint": "An administrator has disabled your ability to create or join campaigns.",
+    "readOnlyLocked": "This campaign is read-only — the GM's campaign access has been disabled.",
+    "readOnlySelf": "Your campaign access has been disabled, so this campaign is read-only for you.",
+    "memberAccessDisabled": "Access disabled",
     "noCampaigns": "No campaigns yet",
     "noCampaignsHint": "Create a campaign to start tracking your sessions.",
     "invitations": "Invitations",
@@ -613,7 +638,9 @@
     "accept": "Accept",
     "decline": "Decline",
     "gm": "GM: {{name}}",
-    "unknownGm": "Unknown"
+    "unknownGm": "Unknown",
+    "nextSession": "Next session",
+    "openNotes": "Notes"
   },
   "campaignDetail": {
     "backToCampaigns": "Campaigns",
@@ -623,7 +650,8 @@
       "overview": "Overview",
       "sessionNotes": "Session Notes",
       "schedule": "Schedule",
-      "resources": "Resources"
+      "resources": "Resources",
+      "notes": "Notes"
     },
     "overview": {
       "details": "Details",
@@ -634,11 +662,27 @@
       "personalCampaignType": "Personal Campaign",
       "members": "Members",
       "invite": "Invite",
-      "noMembers": "No members yet. Invite players above."
+      "noMembers": "No members yet. Invite players above.",
+      "gameMaster": "Game Master",
+      "players": "Players",
+      "availability": "Availability",
+      "customDates_one": "{{count}} custom date",
+      "customDates_other": "{{count}} custom dates"
     },
     "edit": "Edit",
     "deleteAriaLabel": "Delete campaign",
-    "deleteConfirm": "Delete campaign \"{{name}}\"? This cannot be undone."
+    "deleteConfirm": "Delete campaign \"{{name}}\"? This cannot be undone.",
+    "banner": {
+      "empty": "No banner image",
+      "upload": "Upload banner",
+      "replace": "Replace banner",
+      "remove": "Remove banner",
+      "suggestedSize": "Suggested size: 1600 × 800",
+      "edit": "Edit banner",
+      "modalTitle": "Campaign Banner",
+      "allowedFormats": "PNG, JPEG, WebP, or GIF, up to 5 MB."
+    },
+    "openNotes": "Open Notes"
   },
   "campaignEditor": {
     "titleNew": "New Campaign",
@@ -657,7 +701,31 @@
     "cancel": "Cancel",
     "saveChanges": "Save Changes",
     "createCampaign": "Create Campaign",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "next": "Next",
+    "back": "Back",
+    "stepIndicator": "Step {{current}} of {{total}}",
+    "resources": {
+      "title": "Resources",
+      "intro": "Resources are optional. Core books are suggested for the chosen system — add or remove any, and set who can see each.",
+      "selected": "Selected",
+      "none": "No resources selected.",
+      "suggested": "Suggested",
+      "searchPlaceholder": "Search books, maps, and tokens…",
+      "visibilityLabel": "Visibility",
+      "visShared": "Shared with players",
+      "visGm": "GM only",
+      "visPrivate": "Private to owner"
+    },
+    "bannerLabel": "Banner (optional)",
+    "bannerChoose": "Choose an image…",
+    "descriptionMarkdownHint": "Markdown supported",
+    "systemCustom": "Custom (not in library)…",
+    "systemCustomPlaceholder": "System name",
+    "delete": "Delete",
+    "scheduleLabel": "Session schedule",
+    "scheduleEnabled": "Schedule enabled",
+    "scheduleDisabled": "Schedule disabled"
   },
   "members": {
     "noCharacterName": "No character name",
@@ -669,7 +737,14 @@
     "you": "(you)",
     "invitePlayer": "Invite a player:",
     "allInvited": "All users have already been invited.",
-    "invite": "Invite"
+    "invite": "Invite",
+    "uploadArt": "Upload character art",
+    "characterSheet": "Character sheet",
+    "uploadSheet": "Upload sheet",
+    "removeSheet": "Remove sheet",
+    "characterSheetLink": "Character sheet (link)",
+    "linkSheet": "Add link",
+    "sheetUrlPlaceholder": "https://… sheet or PDF"
   },
   "sessions": {
     "title": "Session Notes",
@@ -786,7 +861,22 @@
     "maps": "Maps",
     "tokens": "Tokens",
     "sharedAriaLabel": "Shared — click to make private",
-    "privateAriaLabel": "Private — click to share with players"
+    "privateAriaLabel": "Private — click to share with players",
+    "visibilityLabel": "Visibility",
+    "visShared": "Shared",
+    "visGm": "GM only",
+    "visPrivate": "Private",
+    "manageCategories": "Categories",
+    "categoryLabel": "Category",
+    "typeGroup": "Default group",
+    "vis_public": "Public",
+    "vis_private": "Private",
+    "vis_gm": "GM only",
+    "files": "Files",
+    "uploadFile": "Upload file",
+    "uploading": "Uploading…",
+    "emptyCategory": "Drag resources here",
+    "deleteFileConfirm": "Remove this file? It will be deleted from the campaign."
   },
   "download": {
     "title": "Download Archive",
@@ -918,5 +1008,66 @@
     "map": "Maps",
     "handout": "Handouts & Reference",
     "homebrew": "Homebrew"
+  },
+  "wiki": {
+    "newPage": "New Page",
+    "searchPlaceholder": "Search pages…",
+    "noPages": "No pages yet.",
+    "selectPrompt": "Select a page, or create a new one.",
+    "untitled": "Untitled",
+    "titleLabel": "Page title",
+    "titlePlaceholder": "Page title",
+    "bodyPlaceholder": "Write in Markdown. Link pages with [[Page Title]] and embed Grimoire content with the toolbar.",
+    "markdown": "Markdown",
+    "preview": "Preview",
+    "saving": "Saving…",
+    "visibilityLabel": "Visibility",
+    "vis_gm": "GM only",
+    "vis_group": "All members",
+    "vis_members": "Specific members",
+    "shareWith": "Share with",
+    "noMembers": "No members to share with.",
+    "insertLink": "Link page",
+    "insertEmbed": "Embed content",
+    "backlinks": "Linked from",
+    "byAuthor": "by {{name}}",
+    "deleteConfirm": "Delete \"{{title}}\"? This cannot be undone.",
+    "emptyPage": "This page is empty.",
+    "missingPageHint": "This page doesn't exist yet — it will be created.",
+    "embedPickerTitle": "Embed Grimoire content",
+    "embedSearchPlaceholder": "Search books, maps, and tokens…",
+    "insert": "Insert",
+    "withPage": "At page…",
+    "pageNum": "Page",
+    "embed_book": "Book",
+    "embed_map": "Map",
+    "embed_token": "Token",
+    "embedBookPage": "Book — p. {{page}}",
+    "manageGroups": "Manage groups",
+    "uncategorized": "Uncategorized",
+    "groupLabel": "Group",
+    "emptyGroup": "No pages yet",
+    "iconLabel": "Icon"
+  },
+  "campaignNotes": {
+    "backToOverview": "Back to overview"
+  },
+  "campaignCategories": {
+    "titleNotes": "Note Groups",
+    "titleResources": "Resource Categories",
+    "newPlaceholder": "New category name…",
+    "add": "Add",
+    "none": "No categories yet.",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "deletePrompt": "Delete \"{{name}}\"?",
+    "leaveUncategorized": "Leave items uncategorized",
+    "deletePages": "Delete pages in it",
+    "unlinkResources": "Unlink resources in it",
+    "iconLabel": "Icon"
+  },
+  "iconPicker": {
+    "label": "Choose an icon",
+    "none": "No icon"
   }
 }

@@ -22,6 +22,7 @@ def list_users(_: CurrentUser = Depends(require_admin)):
                 "email": u.email,
                 "role": u.role,
                 "allow_explicit": bool(u.allow_explicit) if u.allow_explicit is not None else True,
+                "campaign_access": u.campaign_access is None or bool(u.campaign_access),
                 "oidc_linked": bool(u.oidc_subject),
                 "created_at": u.created_at.isoformat(),
             }
@@ -75,6 +76,8 @@ def update_user(user_id: str, data: UserUpdate, _: CurrentUser = Depends(require
             user.hashed_password = hash_password(data.password)
         if data.allow_explicit is not None:
             user.allow_explicit = data.allow_explicit
+        if data.campaign_access is not None:
+            user.campaign_access = data.campaign_access
         if data.email is not None:
             new_email = data.email or None  # "" → clear
             if new_email and new_email != user.email:
@@ -92,6 +95,7 @@ def update_user(user_id: str, data: UserUpdate, _: CurrentUser = Depends(require
             "allow_explicit": bool(user.allow_explicit)
             if user.allow_explicit is not None
             else True,
+            "campaign_access": user.campaign_access is None or bool(user.campaign_access),
         }
     finally:
         db.close()

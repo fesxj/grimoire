@@ -20,10 +20,15 @@ def get_schedule(campaign_id: str, current_user: CurrentUser = Depends(get_curre
 
         sched = db.query(CampaignSchedule).filter_by(campaign_id=campaign_id).first()
         if not sched:
-            return {"definition": None, "next_sessions": []}
+            return {"definition": None, "enabled": False, "next_sessions": []}
 
-        next_sessions = compute_next_sessions(sched.definition, n=10)
-        return {"definition": sched.definition, "next_sessions": next_sessions}
+        # A disabled schedule keeps its definition but produces no upcoming sessions.
+        next_sessions = compute_next_sessions(sched.definition, n=10) if sched.enabled else []
+        return {
+            "definition": sched.definition,
+            "enabled": sched.enabled,
+            "next_sessions": next_sessions,
+        }
     finally:
         db.close()
 
@@ -36,7 +41,7 @@ def upsert_schedule(
     db = SessionLocal()
     try:
         c = get_campaign_or_404(db, campaign_id)
-        assert_can_manage(c, current_user)
+        assert_can_manage(c, current_user, db)
         if not c.is_gm_campaign:
             raise HTTPException(400, "Schedules are only available on GM-run campaigns")
         if data.frequency not in ("weekly", "biweekly", "monthly", "custom"):
@@ -61,13 +66,16 @@ def upsert_schedule(
         sched = db.query(CampaignSchedule).filter_by(campaign_id=campaign_id).first()
         if sched:
             sched.definition = definition
+            sched.enabled = data.enabled
         else:
-            sched = CampaignSchedule(campaign_id=campaign_id, definition=definition)
+            sched = CampaignSchedule(
+                campaign_id=campaign_id, definition=definition, enabled=data.enabled
+            )
             db.add(sched)
         db.commit()
 
-        next_sessions = compute_next_sessions(definition, n=10)
-        return {"definition": definition, "next_sessions": next_sessions}
+        next_sessions = compute_next_sessions(definition, n=10) if data.enabled else []
+        return {"definition": definition, "enabled": data.enabled, "next_sessions": next_sessions}
     finally:
         db.close()
 
@@ -76,7 +84,7 @@ def delete_schedule(campaign_id: str, current_user: CurrentUser = Depends(get_cu
     db = SessionLocal()
     try:
         c = get_campaign_or_404(db, campaign_id)
-        assert_can_manage(c, current_user)
+        assert_can_manage(c, current_user, db)
         sched = db.query(CampaignSchedule).filter_by(campaign_id=campaign_id).first()
         if sched:
             db.delete(sched)
@@ -93,7 +101,9 @@ def get_availability(campaign_id: str, current_user: CurrentUser = Depends(get_c
             raise HTTPException(403, "Not a member of this campaign")
 
         sched = db.query(CampaignSchedule).filter_by(campaign_id=campaign_id).first()
-        next_sessions = compute_next_sessions(sched.definition, n=10) if sched else []
+        next_sessions = (
+            compute_next_sessions(sched.definition, n=10) if sched and sched.enabled else []
+        )
 
         all_avail = (
             db.query(SessionAvailability)

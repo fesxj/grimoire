@@ -53,6 +53,7 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     password: Optional[str] = None
     allow_explicit: Optional[bool] = None
+    campaign_access: Optional[bool] = None
     email: Optional[str] = None  # "" clears the value
 
     @field_validator("role")

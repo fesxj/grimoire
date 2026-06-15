@@ -49,7 +49,7 @@ Tokens are returned by `/api/auth/login` and expire after **30 days**.
 | `/api/auth/config` | GET | — | Public auth configuration for the login screen: `{password_auth_enabled, custom_login_message_enabled, custom_login_message, oidc_enabled, oidc_button_text, oidc_auto_launch}`. The custom message is only returned when its toggle is on. OIDC fields are only true/non-empty when the IdP is fully configured. |
 | `/api/auth/setup` | POST | — | First-run admin account creation. Body: `{username, password}`. Returns `{token, user}`. Fails with 400 if any users exist. |
 | `/api/auth/login` | POST | — | Authenticate. Body: `{username, password}`. Returns `{token, user}`. Returns 403 if password authentication is disabled. |
-| `/api/auth/me` | GET | any | Current user: `{id, username, display_name, email, role, allow_explicit, oidc_linked}` |
+| `/api/auth/me` | GET | any | Current user: `{id, username, display_name, email, role, allow_explicit, campaign_access, oidc_linked}` |
 | `/api/auth/openid/login` | GET | — | Start an OIDC login. Redirects to the IdP. Optional `?return_to=/path` to redirect after callback. Returns 503 if OIDC isn't configured. |
 | `/api/auth/openid/callback` | GET | — | OIDC callback. Validates the code, finds/creates the local user, and redirects to the frontend with `#oidc_token=<jwt>`. |
 | `/api/auth/openid/discover` | POST | admin | Server-side discovery fetch. Body: `{issuer_url}`. Returns the relevant endpoints from `.well-known/openid-configuration`. |
@@ -58,9 +58,9 @@ Tokens are returned by `/api/auth/login` and expire after **30 days**.
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/api/users` | GET | admin | List all users (each entry includes `email` and `oidc_linked`) |
+| `/api/users` | GET | admin | List all users (each entry includes `email`, `allow_explicit`, `campaign_access`, and `oidc_linked`) |
 | `/api/users` | POST | admin | Create a user. Body: `{username, password, role?, email?}` (role defaults to `player`; email is optional and unique case-insensitively) |
-| `/api/users/:id` | PATCH | admin | Update `role`, `password`, `allow_explicit`, or `email` (use `""` to clear the email) |
+| `/api/users/:id` | PATCH | admin | Update `role`, `password`, `allow_explicit`, `campaign_access`, or `email` (use `""` to clear the email). `campaign_access: false` blocks the user from creating/joining/managing campaigns without deleting existing ones; OIDC's `campaignAccess` permissions claim overrides it on next login. |
 | `/api/users/:id` | DELETE | admin | Delete a user (cannot delete self or last admin) |
 | `/api/users/me/preferences` | PATCH | any | Update own `display_name`, `allow_explicit`, or `email` (use `""` to clear) |
 | `/api/users/me/password` | PATCH | any | Change own password. Body: `{current_password, new_password}` |
@@ -218,54 +218,110 @@ Bookmarks are per-user — users cannot see or modify each other's bookmarks.
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/api/campaigns` | GET | any | List own + invited campaigns |
-| `/api/campaigns` | POST | any (gm/admin for `is_gm_campaign: true`) | Create campaign. Body: `{name, description?, is_gm_campaign?, gm_title?, system_id?, parent_campaign_id?}` |
-| `/api/campaigns/:id` | GET | owner or member | Campaign detail with members and resources |
-| `/api/campaigns/:id` | PATCH | owner or admin | Update `name`, `description`, `gm_title`, `system_id`, `parent_campaign_id` |
-| `/api/campaigns/:id` | DELETE | owner or admin | Delete campaign and all related data |
+| `/api/campaigns` | GET | any | List own + invited campaigns (admins see only their own here). Each item includes `has_banner`, `next_session` (next scheduled date or null), and `last_accessed_at`. |
+| `/api/campaigns` | POST | any (gm/admin for `is_gm_campaign: true`) | Create campaign. Body: `{name, description?, is_gm_campaign?, gm_title?, system_id?, system_name?, parent_campaign_id?, resources?}`. `description` accepts markdown. `system_name` is free text for a system not in the library (ignored when `system_id` is set). `resources` is an explicit list of `{resource_type, resource_id, visibility?, shared_user_ids?}` to link — omit it (or send `[]`) to link nothing. No resources are auto-added. Returns 403 if the user's `campaign_access` is disabled. |
+| `/api/campaigns/:id` | GET | owner or member | Campaign detail with members and resources. Includes `has_banner` and `locked` (`true` when the owner's `campaign_access` is disabled — the campaign is then read-only for everyone, owner-management endpoints return 403, members keep read access) plus `owner_has_campaign_access`. Each member includes `id`, `has_art`, `has_sheet`, `character_sheet_filename`, and `campaign_access` (false → flagged as a disabled user). Opening this endpoint records `last_accessed_at` (drives recently-accessed sorting on the campaigns list). |
+| `/api/campaigns/:id` | PATCH | owner | Update `name`, `description` (markdown), `gm_title`, `system_id`, `system_name`, `parent_campaign_id`. Setting `system_id` clears `system_name` and vice-versa (`system_name: ""` clears it). |
+| `/api/campaigns/:id` | DELETE | owner | Delete campaign and all related data. Admins delete via the database directly. |
+| `/api/campaigns/admin/by-user/:user_id` | GET | admin | Read-only minimal list of a user's campaigns (`id`, `name`, `description`, `is_gm_campaign`, `system_id`, `system_name`) for the user-management page |
 
 #### Members
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/api/campaigns/:id/invite` | POST | owner or admin | Invite a user. Body: `{user_id}`. GM campaigns only. |
-| `/api/campaigns/:id/members/:user_id` | PATCH | member (own) or owner | Accept/decline or set character name. Body: `{status?, character_name?}` |
-| `/api/campaigns/:id/members/:user_id` | DELETE | owner, admin, or self | Remove member |
-| `/api/campaigns/:id/eligible-members` | GET | owner or admin | Users eligible to be invited |
+| `/api/campaigns/:id/invite` | POST | owner | Invite a user. Body: `{user_id}`. GM campaigns only. Returns 403 if the target user's `campaign_access` is disabled. |
+| `/api/campaigns/:id/members/:user_id` | PATCH | member (own) or owner | Accept/decline or set character name. Body: `{status?, character_name?}`. A user with `campaign_access` disabled cannot `accept` (403) but may `decline`. |
+| `/api/campaigns/:id/members/:user_id` | DELETE | owner or self | Remove member |
+| `/api/campaigns/:id/eligible-members` | GET | owner | Users eligible to be invited (each includes `campaign_access`) |
 
 Member statuses: `invited` → `accepted` or `declined`
+
+#### Banner, character art & sheets
+
+Files are stored on disk under `DATA_PATH/campaign_uploads/`. Banners are keyed by campaign id; character art and sheets are keyed by the **CampaignMember id** (`member.id` from the campaign-detail response), so a player in multiple campaigns gets a distinct file per membership. Image uploads (banner, art) accept PNG/JPEG/WebP/GIF up to 5 MB; sheets additionally accept PDF up to 15 MB. Serving endpoints accept the `?token=` query param for use in `<img>`/download URLs.
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/campaigns/:id/banner` | POST | owner | Upload/replace campaign banner (multipart `file`) |
+| `/api/campaigns/:id/banner` | GET | member or owner | Banner image |
+| `/api/campaigns/:id/banner` | DELETE | owner | Remove banner |
+| `/api/campaigns/:id/members/:member_id/art` | POST | member (own) or owner | Upload/replace character art (multipart `file`) |
+| `/api/campaigns/:id/members/:member_id/art` | GET | member or owner | Character art image |
+| `/api/campaigns/:id/members/:member_id/art` | DELETE | member (own) or owner | Remove character art |
+| `/api/campaigns/:id/members/:member_id/sheet` | POST | member (own) or owner | Upload/replace character sheet (multipart `file`) |
+| `/api/campaigns/:id/members/:member_id/sheet` | GET | member or owner | Download character sheet (original filename) |
+| `/api/campaigns/:id/members/:member_id/sheet` | DELETE | member (own) or owner | Remove character sheet |
 
 #### Resources
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/api/campaigns/resources/search` | GET | any | Search books/maps/tokens by name. Query: `q`, `resource_type?`, `limit?` (default 30) |
-| `/api/campaigns/:id/resources` | GET | member or owner | List linked resources (non-owners only see `shared: true`) |
-| `/api/campaigns/:id/resources` | POST | owner or admin | Link a resource. Body: `{resource_type, resource_id, shared?}` |
-| `/api/campaigns/:id/resources/:res_id` | PATCH | owner or admin | Toggle sharing. Body: `{shared}` |
-| `/api/campaigns/:id/resources/:res_id` | DELETE | owner or admin | Unlink resource |
+| `/api/campaigns/resources/suggested/:system_id` | GET | any | Books in a game system for the create wizard. Core-category books are flagged `suggested` and ordered first. |
+| `/api/campaigns/:id/resources` | GET | member or owner | List linked resources (each with `visibility`, `category_id`, `sort_order`, `has_thumbnail`; owner items also include `shared_user_ids`). Ordered public → private → gm, then by `sort_order`. Players see only what their visibility allows. |
+| `/api/campaigns/:id/resources` | POST | owner | Link a resource. Body: `{resource_type, resource_id, visibility?, shared_user_ids?, category_id?}` |
+| `/api/campaigns/:id/resources/reorder` | PUT | owner | Drag-and-drop order. Body: `{ordered_ids}` |
+| `/api/campaigns/:id/resources/:res_id` | PATCH | owner | Update visibility/shares/category. Body: `{visibility?, shared_user_ids?, category_id?}` (each optional; `category_id: ""` clears it) |
+| `/api/campaigns/:id/resources/:res_id` | DELETE | owner | Unlink resource (deletes the underlying file for `file` resources) |
+| `/api/campaigns/:id/files` | POST | owner | Upload a campaign file (multipart `file`); links it as a `file` resource. Subject to admin upload limits (admins exempt). |
+| `/api/campaigns/:id/files/:file_id` | GET | per visibility | Download a campaign file (honours the linking resource's visibility) |
 
-Resource types: `book`, `map`, `token`
+Resource types: `book`, `map`, `token`, `file` (a GM-uploaded file stored under `DATA_PATH/campaign_uploads/files/`, separate from the library).
 
-#### Sessions
+Resource **visibility** is one of: `public` (every accepted member), `private` (the owner plus the users in `shared_user_ids`), or `gm` (owner only). The character-sheet upload endpoints also accept a URL alternative via the member PATCH: `PATCH /api/campaigns/:id/members/:user_id` with `{character_sheet_url}` (`""` clears it; setting a URL clears any uploaded sheet, and uploading a sheet clears the URL).
+
+App-wide admin settings gate campaign file uploads (admins are exempt): `campaign_uploads_disabled` (bool), `campaign_upload_max_file_mb` (int, 0 = unlimited), `campaign_upload_max_total_mb` (int, 0 = unlimited). They are settable via `PATCH /api/settings` and exposed on `GET /api/settings/ui`.
+
+#### Categories
+
+GM-defined groupings for wiki pages and resources, scoped per campaign by `kind` (`note` or `resource`); the two namespaces never mix. Wiki pages carry an optional `category_id` (null = Uncategorized); resources carry an optional `category_id` (null = grouped under their built-in type group: Books / Maps / Tokens). Set a category via the item's PATCH endpoint (`category_id`), using `""` to clear it.
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/campaigns/:id/categories` | GET | member or owner | List categories. Query: `kind?` (`note`\|`resource`) |
+| `/api/campaigns/:id/categories` | POST | owner | Create. Body: `{name, kind, icon?}` (`icon` = a Lucide icon name) |
+| `/api/campaigns/:id/categories/reorder` | PUT | owner | Set sort order. Body: `{ordered_ids}` |
+| `/api/campaigns/:id/categories/:cat_id` | PATCH | owner | Rename / set icon. Body: `{name?, icon?}` (`icon: ""` clears it) |
+| `/api/campaigns/:id/categories/:cat_id` | DELETE | owner | Delete. Query: `mode` = `uncategorize` (default; items kept, moved out of the category) or `delete_items` (wiki pages deleted, resources unlinked) |
+
+#### Wiki (notes)
+
+The campaign notebook is a set of markdown **wiki pages**. Pages link to one another with `[[Page Title]]` (or `[[Page Title|label]]`) syntax and embed Grimoire content inline with `[[book:ID]]`, `[[book:ID:PAGE]]`, `[[map:ID]]`, or `[[token:ID]]`. On save the body is re-parsed: unknown `[[Page Title]]` targets auto-create a stub page (inheriting the source page's visibility), and backlink rows are rebuilt.
+
+Each page has a **visibility**: `gm` (owner only), `group` (all accepted members), or `members` (owner plus the users in `shared_user_ids`). The owner may create/edit/delete any page; a member may create `group` pages and edit/delete pages they authored, but cannot set `gm`/`members` visibility.
+
+| Endpoint | Method | Auth | Description |
+|----------|--------|------|-------------|
+| `/api/campaigns/:id/wiki` | GET | member or owner | List pages the caller can see (`id, title, slug, visibility, page_type, session_date, category_id, icon, sort_order, updated_at`), ordered by `sort_order` |
+| `/api/campaigns/:id/wiki` | POST | member or owner | Create a page. Body: `{title?, body?, visibility?, page_type?, session_date?, shared_user_ids?, category_id?, icon?}` (`icon` = a Lucide icon name) |
+| `/api/campaigns/:id/wiki/search` | GET | member or owner | Search visible pages by title/body. Query: `q` |
+| `/api/campaigns/:id/wiki/titles` | GET | member or owner | `{title, slug}` list for `[[link]]` autocomplete |
+| `/api/campaigns/:id/wiki/reorder` | PUT | owner | Drag-and-drop order. Body: `{ordered_ids}` |
+| `/api/campaigns/:id/wiki/:page_id` | GET | per visibility | Page detail incl. `body`, `backlinks`, `shared_user_ids`, `icon`, `can_edit` |
+| `/api/campaigns/:id/wiki/:page_id` | PATCH | owner or page author | Update fields (each optional; `icon: ""` clears it) |
+| `/api/campaigns/:id/wiki/:page_id` | DELETE | owner or page author | Delete the page and its link rows |
+
+#### Sessions (legacy)
+
+Superseded by the wiki. On startup, any non-empty legacy session notes are rolled into wiki pages (GM internal → a `gm` page, GM external → a `group` page, each player note → a `group` page) and the legacy session rows are removed; empty sessions are simply purged. These endpoints remain for backward compatibility.
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/api/campaigns/:id/sessions` | GET | member or owner | List sessions sorted by date |
 | `/api/campaigns/:id/sessions` | POST | member or owner | Create session. Body: `{session_date, title?}` (date: `YYYY-MM-DD`) |
 | `/api/campaigns/:id/sessions/:sid` | GET | member or owner | Session detail. GM sees `internal_content`; members see only `external_content`. |
-| `/api/campaigns/:id/sessions/:sid` | PATCH | owner or admin | Update `title` |
-| `/api/campaigns/:id/sessions/:sid` | DELETE | owner or admin | Delete session and all notes |
+| `/api/campaigns/:id/sessions/:sid` | PATCH | owner | Update `title` |
+| `/api/campaigns/:id/sessions/:sid` | DELETE | owner | Delete session and all notes |
 | `/api/campaigns/:id/sessions/:sid/notes/player` | PUT | member or owner | Save own player note. Body: `{content}` |
-| `/api/campaigns/:id/sessions/:sid/notes/gm` | PUT | owner or admin | Save GM notes. Body: `{internal_content?, external_content?}` |
+| `/api/campaigns/:id/sessions/:sid/notes/gm` | PUT | owner | Save GM notes. Body: `{internal_content?, external_content?}` |
 
 #### Schedule
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/api/campaigns/:id/schedule` | GET | member or owner | Schedule definition + next 10 session dates |
-| `/api/campaigns/:id/schedule` | PUT | owner or admin | Create or update schedule (GM campaigns only) |
-| `/api/campaigns/:id/schedule` | DELETE | owner or admin | Remove schedule |
+| `/api/campaigns/:id/schedule` | GET | member or owner | Returns `{definition, enabled, next_sessions}`. When `enabled` is false the definition is preserved but `next_sessions` is empty. |
+| `/api/campaigns/:id/schedule` | PUT | owner | Create or update schedule (GM campaigns only). Body accepts `enabled` (default true); setting it false keeps the definition but deactivates the schedule (no next sessions, no availability chart). |
+| `/api/campaigns/:id/schedule` | DELETE | owner | Remove schedule |
 
 **Schedule body:**
 ```json
@@ -294,7 +350,7 @@ Resource types: `book`, `map`, `token`
 |----------|--------|------|-------------|
 | `/api/campaigns/:id/availability` | GET | member or owner | Availability chart for next 10 scheduled sessions |
 | `/api/campaigns/:id/availability/:date` | PUT | member or owner | Set own availability. Body: `{status}` |
-| `/api/campaigns/:id/availability/:date/cancel` | PUT | owner or admin | Toggle session cancellation for a date |
+| `/api/campaigns/:id/availability/:date/cancel` | PUT | owner | Toggle session cancellation for a date |
 
 Availability statuses: `available`, `tentative`, `unavailable`
 

@@ -75,6 +75,23 @@ def init_db(db_path: str):
             "ALTER TABLE users ADD COLUMN oidc_subject VARCHAR(255)",
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users(email) WHERE email IS NOT NULL",
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_users_oidc_subject ON users(oidc_subject) WHERE oidc_subject IS NOT NULL",
+            "ALTER TABLE campaigns ADD COLUMN banner_path VARCHAR(255)",
+            "ALTER TABLE campaign_members ADD COLUMN character_art_path VARCHAR(255)",
+            "ALTER TABLE campaign_members ADD COLUMN character_sheet_path VARCHAR(255)",
+            "ALTER TABLE campaign_members ADD COLUMN character_sheet_filename VARCHAR(255)",
+            "ALTER TABLE campaign_resources ADD COLUMN gm_only BOOLEAN DEFAULT 0",
+            "ALTER TABLE campaigns ADD COLUMN last_accessed_at DATETIME",
+            "ALTER TABLE campaign_resources ADD COLUMN category_id VARCHAR(36)",
+            "ALTER TABLE wiki_pages ADD COLUMN category_id VARCHAR(36)",
+            "ALTER TABLE campaign_resources ADD COLUMN visibility VARCHAR(20) DEFAULT 'gm'",
+            "ALTER TABLE campaign_resources ADD COLUMN sort_order INTEGER DEFAULT 0",
+            "ALTER TABLE campaign_members ADD COLUMN character_sheet_url VARCHAR(1000)",
+            "ALTER TABLE wiki_pages ADD COLUMN sort_order INTEGER DEFAULT 0",
+            "ALTER TABLE wiki_pages ADD COLUMN icon VARCHAR(50)",
+            "ALTER TABLE campaign_categories ADD COLUMN icon VARCHAR(50)",
+            "ALTER TABLE campaigns ADD COLUMN system_name VARCHAR(255)",
+            "ALTER TABLE campaign_schedules ADD COLUMN enabled BOOLEAN DEFAULT 1 NOT NULL",
+            "ALTER TABLE users ADD COLUMN campaign_access BOOLEAN DEFAULT 1",
         ]:
             try:
                 conn.execute(text(migration))
@@ -113,6 +130,7 @@ def init_db(db_path: str):
                             hashed_password VARCHAR(255),
                             role VARCHAR(20),
                             allow_explicit BOOLEAN,
+                            campaign_access BOOLEAN DEFAULT 1,
                             opds_token VARCHAR(64),
                             oidc_subject VARCHAR(255),
                             created_at DATETIME
@@ -125,7 +143,8 @@ def init_db(db_path: str):
                         """
                         INSERT INTO users_new
                             SELECT id, username, display_name, email, hashed_password,
-                                   role, allow_explicit, opds_token, oidc_subject, created_at
+                                   role, allow_explicit, 1, opds_token, oidc_subject,
+                                   created_at
                             FROM users
                         """
                     )
@@ -149,6 +168,19 @@ def init_db(db_path: str):
 
         # Normalize all stored tags to lowercase, deduplicating within each row.
         _normalize_tags_in_db(conn)
+
+        # Backfill resource visibility from the legacy shared/gm_only flags. Runs
+        # only on rows still at the column default; safe to repeat.
+        try:
+            conn.execute(
+                text(
+                    "UPDATE campaign_resources SET visibility='public' "
+                    "WHERE visibility='gm' AND shared=1 AND COALESCE(gm_only,0)=0"
+                )
+            )
+            conn.commit()
+        except Exception:
+            pass
 
         conn.execute(
             text(

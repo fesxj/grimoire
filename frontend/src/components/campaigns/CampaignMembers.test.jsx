@@ -113,6 +113,16 @@ describe('MemberRow', () => {
     renderRow({ character_name: null })
     expect(screen.getByText('No character name')).toBeTruthy()
   })
+
+  it('flags a member whose campaign access is disabled', () => {
+    renderRow({ campaign_access: false })
+    expect(screen.getByText('Access disabled')).toBeTruthy()
+  })
+
+  it('does not flag a member with campaign access enabled', () => {
+    renderRow({ campaign_access: true })
+    expect(screen.queryByText('Access disabled')).toBeNull()
+  })
 })
 
 describe('InvitePanel', () => {
@@ -150,5 +160,21 @@ describe('InvitePanel', () => {
     fireEvent.click(screen.getByText('Invite'))
     await waitFor(() => expect(campaigns.invite).toHaveBeenCalledWith('c1', 'u2'))
     expect(onInvited).toHaveBeenCalled()
+  })
+
+  it('disables the invite button for users whose campaign access is off', async () => {
+    campaigns.eligibleMembers.mockResolvedValue([
+      {
+        id: 'u3',
+        username: 'carol',
+        display_name: null,
+        role: 'player',
+        already_invited: false,
+        campaign_access: false,
+      },
+    ])
+    render(<InvitePanel campaignId="c1" onInvited={vi.fn()} />)
+    await waitFor(() => screen.getByText('carol'))
+    expect(screen.getByText('Invite').closest('button')).toBeDisabled()
   })
 })

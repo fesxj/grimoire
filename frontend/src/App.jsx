@@ -23,6 +23,9 @@ import SettingsView from './views/SettingsView'
 import FavoritesView from './views/FavoritesView'
 import CampaignsView from './views/CampaignsView'
 import CampaignDetailView from './views/CampaignDetailView'
+import CampaignNotesView from './views/CampaignNotesView'
+
+const SIDEBAR_COLLAPSED_KEY = 'grimoire_sidebar_collapsed'
 
 function LoadingScreen() {
   const { t } = useTranslation()
@@ -61,6 +64,15 @@ function AppShell() {
     hide_campaigns: false,
   })
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
+  )
+  const toggleSidebar = () =>
+    setSidebarCollapsed((c) => {
+      const next = !c
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next))
+      return next
+    })
   const location = useLocation()
   const isReader =
     location.pathname.startsWith('/library/book/') ||
@@ -93,7 +105,14 @@ function AppShell() {
     <UISettingsProvider value={uiSettings}>
       <div style={{ display: 'flex', height: '100vh' }}>
         {!isMobile && (
-          <Sidebar stats={stats} user={user} onLogout={logout} uiSettings={uiSettings} />
+          <Sidebar
+            stats={stats}
+            user={user}
+            onLogout={logout}
+            uiSettings={uiSettings}
+            collapsed={sidebarCollapsed}
+            onToggleCollapse={toggleSidebar}
+          />
         )}
 
         <main
@@ -119,10 +138,7 @@ function AppShell() {
             <Route path="/favorites" element={<FavoritesView />} />
             <Route path="/campaigns" element={<CampaignsView />} />
             <Route path="/campaigns/:campaignId" element={<Navigate to="overview" replace />} />
-            <Route
-              path="/campaigns/:campaignId/sessions/:sessionId"
-              element={<CampaignDetailView />}
-            />
+            <Route path="/campaigns/:campaignId/notes" element={<CampaignNotesView />} />
             <Route path="/campaigns/:campaignId/:tab" element={<CampaignDetailView />} />
             <Route path="/settings" element={<Navigate to="/settings/account" replace />} />
             <Route path="/settings/:tab" element={<SettingsView user={user} onLogout={logout} />} />

@@ -83,4 +83,34 @@ describe('UserRow', () => {
     expect(screen.getByText('admin')).toBeInTheDocument()
     expect(screen.getAllByText('Admin').length).toBeGreaterThanOrEqual(1)
   })
+
+  it('checks the campaign access toggle by default and toggles it off', () => {
+    const onCampaignAccessChange = vi.fn()
+    render(
+      <UserRow
+        user={alice}
+        currentUserId="other"
+        onRoleChange={vi.fn()}
+        onCampaignAccessChange={onCampaignAccessChange}
+        onDelete={vi.fn()}
+      />
+    )
+    const toggle = screen.getByLabelText('Campaigns')
+    expect(toggle).toBeChecked()
+    fireEvent.click(toggle)
+    expect(onCampaignAccessChange).toHaveBeenCalledWith('user-1', false)
+  })
+
+  it('reflects a disabled campaign access value', () => {
+    render(
+      <UserRow
+        user={{ ...alice, campaign_access: false }}
+        currentUserId="other"
+        onRoleChange={vi.fn()}
+        onCampaignAccessChange={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    )
+    expect(screen.getByLabelText('Campaigns')).not.toBeChecked()
+  })
 })

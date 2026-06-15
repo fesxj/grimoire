@@ -1,5 +1,7 @@
 {
-  "_meta": { "nativeName": "Français (CA)" },
+  "_meta": {
+    "nativeName": "Français (CA)"
+  },
   "app": {
     "name": "GRIMOIRE",
     "subtitle": "Bibliothèque TTRPG"
@@ -13,7 +15,9 @@
     "campaigns": "Campagnes",
     "settings": "Paramètres",
     "logOut": "Se déconnecter",
-    "more": "Plus"
+    "more": "Plus",
+    "collapseSidebar": "Réduire la barre latérale",
+    "expandSidebar": "Développer la barre latérale"
   },
   "stats": {
     "systems": "Systèmes",
@@ -461,6 +465,14 @@
       "generate": "Générer une clé API",
       "generating": "Génération…",
       "copyKey": "Copier la clé"
+    },
+    "campaignUploads": {
+      "title": "Téléversements de campagne",
+      "description": "Contrôlez les fichiers téléversés par les MJ et joints aux campagnes. Vous (admin) n'êtes pas soumis à ces limites.",
+      "disable": "Désactiver les téléversements pour les non-admins",
+      "perFile": "Taille max par fichier (Mo, 0 = illimité)",
+      "perCampaign": "Total max par campagne (Mo, 0 = illimité)",
+      "hint": "Les fichiers sont stockés dans le répertoire de données, séparément de la bibliothèque."
     }
   },
   "users": {
@@ -483,6 +495,9 @@
     "cannotDeleteSelf": "Impossible de supprimer votre propre compte",
     "cannotChangeSelfRole": "Impossible de modifier votre propre rôle",
     "allowExplicitTitle": "Autoriser le contenu explicite",
+    "campaignAccess": "Campagnes",
+    "campaignAccessTitle": "Autoriser cet utilisateur à créer, rejoindre et gérer des campagnes (remplacé par votre fournisseur OIDC à la prochaine connexion si une revendication campaignAccess est configurée)",
+    "failedUpdateCampaignAccess": "Échec de la mise à jour de l'accès aux campagnes.",
     "setPassword": "Définir le mot de passe",
     "setPasswordTitle": "Définir le mot de passe de cet utilisateur",
     "newPasswordPlaceholder": "Nouveau mot de passe (min. 8)",
@@ -501,7 +516,12 @@
     "noEmail": "aucun courriel",
     "editEmail": "Modifier le courriel",
     "failedSetEmail": "Échec de la mise à jour du courriel.",
-    "oidcLinkedTitle": "Ce compte est lié à un fournisseur d'identité OpenID Connect."
+    "oidcLinkedTitle": "Ce compte est lié à un fournisseur d'identité OpenID Connect.",
+    "campaigns": {
+      "toggleLabel": "Campagnes",
+      "none": "Aucune campagne.",
+      "loadFailed": "Impossible de charger les campagnes."
+    }
   },
   "maintenance": {
     "rescan": {
@@ -601,6 +621,11 @@
   "campaigns": {
     "title": "Campagnes",
     "newCampaign": "Nouvelle campagne",
+    "accessDisabled": "Accès aux campagnes désactivé",
+    "accessDisabledHint": "Un administrateur a désactivé votre capacité à créer ou rejoindre des campagnes.",
+    "readOnlyLocked": "Cette campagne est en lecture seule — l'accès du MJ aux campagnes a été désactivé.",
+    "readOnlySelf": "Votre accès aux campagnes a été désactivé ; cette campagne est donc en lecture seule pour vous.",
+    "memberAccessDisabled": "Accès désactivé",
     "noCampaigns": "Aucune campagne pour l'instant",
     "noCampaignsHint": "Créez une campagne pour commencer à suivre vos sessions.",
     "invitations": "Invitations",
@@ -613,7 +638,9 @@
     "accept": "Accepter",
     "decline": "Refuser",
     "gm": "MJ : {{name}}",
-    "unknownGm": "Inconnu"
+    "unknownGm": "Inconnu",
+    "nextSession": "Prochaine séance",
+    "openNotes": "Notes"
   },
   "campaignDetail": {
     "backToCampaigns": "Campagnes",
@@ -623,7 +650,8 @@
       "overview": "Aperçu",
       "sessionNotes": "Notes de session",
       "schedule": "Horaire",
-      "resources": "Ressources"
+      "resources": "Ressources",
+      "notes": "Notes"
     },
     "overview": {
       "details": "Détails",
@@ -634,11 +662,27 @@
       "personalCampaignType": "Campagne personnelle",
       "members": "Membres",
       "invite": "Inviter",
-      "noMembers": "Aucun membre pour l'instant. Invitez des joueurs ci-dessus."
+      "noMembers": "Aucun membre pour l'instant. Invitez des joueurs ci-dessus.",
+      "gameMaster": "Maître de jeu",
+      "players": "Joueurs",
+      "availability": "Disponibilités",
+      "customDates_one": "{{count}} date personnalisée",
+      "customDates_other": "{{count}} dates personnalisées"
     },
     "edit": "Modifier",
     "deleteAriaLabel": "Supprimer la campagne",
-    "deleteConfirm": "Supprimer la campagne « {{name}} » ? Cette action est irréversible."
+    "deleteConfirm": "Supprimer la campagne « {{name}} » ? Cette action est irréversible.",
+    "banner": {
+      "empty": "Aucune bannière",
+      "upload": "Téléverser une bannière",
+      "replace": "Remplacer la bannière",
+      "remove": "Retirer la bannière",
+      "suggestedSize": "Taille suggérée : 1600 × 800",
+      "edit": "Modifier la bannière",
+      "modalTitle": "Bannière de campagne",
+      "allowedFormats": "PNG, JPEG, WebP ou GIF, jusqu'à 5 Mo."
+    },
+    "openNotes": "Ouvrir les notes"
   },
   "campaignEditor": {
     "titleNew": "Nouvelle campagne",
@@ -657,7 +701,31 @@
     "cancel": "Annuler",
     "saveChanges": "Enregistrer les modifications",
     "createCampaign": "Créer la campagne",
-    "saving": "Enregistrement…"
+    "saving": "Enregistrement…",
+    "next": "Suivant",
+    "back": "Retour",
+    "stepIndicator": "Étape {{current}} sur {{total}}",
+    "resources": {
+      "title": "Ressources",
+      "intro": "Les ressources sont optionnelles. Les livres de base sont suggérés pour le système choisi — ajoutez-en ou retirez-en, et définissez qui peut voir chacune.",
+      "selected": "Sélectionnées",
+      "none": "Aucune ressource sélectionnée.",
+      "suggested": "Suggérées",
+      "searchPlaceholder": "Rechercher livres, cartes et jetons…",
+      "visibilityLabel": "Visibilité",
+      "visShared": "Partagé avec les joueurs",
+      "visGm": "MJ seulement",
+      "visPrivate": "Privé au propriétaire"
+    },
+    "bannerLabel": "Bannière (optionnel)",
+    "bannerChoose": "Choisir une image…",
+    "descriptionMarkdownHint": "Markdown pris en charge",
+    "systemCustom": "Personnalisé (hors bibliothèque)…",
+    "systemCustomPlaceholder": "Nom du système",
+    "delete": "Supprimer",
+    "scheduleLabel": "Horaire des séances",
+    "scheduleEnabled": "Horaire activé",
+    "scheduleDisabled": "Horaire désactivé"
   },
   "members": {
     "noCharacterName": "Pas de nom de personnage",
@@ -669,7 +737,14 @@
     "you": "(vous)",
     "invitePlayer": "Inviter un joueur :",
     "allInvited": "Tous les utilisateurs ont déjà été invités.",
-    "invite": "Inviter"
+    "invite": "Inviter",
+    "uploadArt": "Téléverser l'illustration du personnage",
+    "characterSheet": "Fiche de personnage",
+    "uploadSheet": "Téléverser la fiche",
+    "removeSheet": "Retirer la fiche",
+    "characterSheetLink": "Fiche de personnage (lien)",
+    "linkSheet": "Ajouter un lien",
+    "sheetUrlPlaceholder": "https://… fiche ou PDF"
   },
   "sessions": {
     "title": "Notes de session",
@@ -786,7 +861,22 @@
     "maps": "Cartes",
     "tokens": "Pions",
     "sharedAriaLabel": "Partagée — cliquer pour rendre privée",
-    "privateAriaLabel": "Privée — cliquer pour partager avec les joueurs"
+    "privateAriaLabel": "Privée — cliquer pour partager avec les joueurs",
+    "visibilityLabel": "Visibilité",
+    "visShared": "Partagé",
+    "visGm": "MJ seulement",
+    "visPrivate": "Privé",
+    "manageCategories": "Catégories",
+    "categoryLabel": "Catégorie",
+    "typeGroup": "Groupe par défaut",
+    "vis_public": "Public",
+    "vis_private": "Privé",
+    "vis_gm": "MJ seulement",
+    "files": "Fichiers",
+    "uploadFile": "Téléverser un fichier",
+    "uploading": "Téléversement…",
+    "emptyCategory": "Glissez des ressources ici",
+    "deleteFileConfirm": "Retirer ce fichier ? Il sera supprimé de la campagne."
   },
   "download": {
     "title": "Télécharger l'archive",
@@ -918,5 +1008,66 @@
     "map": "Cartes",
     "handout": "Documents et références",
     "homebrew": "Homebrew"
+  },
+  "wiki": {
+    "newPage": "Nouvelle page",
+    "searchPlaceholder": "Rechercher des pages…",
+    "noPages": "Aucune page.",
+    "selectPrompt": "Sélectionnez une page ou créez-en une.",
+    "untitled": "Sans titre",
+    "titleLabel": "Titre de la page",
+    "titlePlaceholder": "Titre de la page",
+    "bodyPlaceholder": "Rédigez en Markdown. Liez des pages avec [[Titre de page]] et intégrez du contenu Grimoire via la barre d'outils.",
+    "markdown": "Markdown",
+    "preview": "Aperçu",
+    "saving": "Enregistrement…",
+    "visibilityLabel": "Visibilité",
+    "vis_gm": "MJ seulement",
+    "vis_group": "Tous les membres",
+    "vis_members": "Membres précis",
+    "shareWith": "Partager avec",
+    "noMembers": "Aucun membre avec qui partager.",
+    "insertLink": "Lier une page",
+    "insertEmbed": "Intégrer du contenu",
+    "backlinks": "Lié depuis",
+    "byAuthor": "par {{name}}",
+    "deleteConfirm": "Supprimer « {{title}} » ? Cette action est irréversible.",
+    "emptyPage": "Cette page est vide.",
+    "missingPageHint": "Cette page n'existe pas encore — elle sera créée.",
+    "embedPickerTitle": "Intégrer du contenu Grimoire",
+    "embedSearchPlaceholder": "Rechercher livres, cartes et jetons…",
+    "insert": "Insérer",
+    "withPage": "À la page…",
+    "pageNum": "Page",
+    "embed_book": "Livre",
+    "embed_map": "Carte",
+    "embed_token": "Jeton",
+    "embedBookPage": "Livre — p. {{page}}",
+    "manageGroups": "Gérer les groupes",
+    "uncategorized": "Non classé",
+    "groupLabel": "Groupe",
+    "emptyGroup": "Aucune page",
+    "iconLabel": "Icône"
+  },
+  "campaignNotes": {
+    "backToOverview": "Retour à l'aperçu"
+  },
+  "campaignCategories": {
+    "titleNotes": "Groupes de notes",
+    "titleResources": "Catégories de ressources",
+    "newPlaceholder": "Nom de la nouvelle catégorie…",
+    "add": "Ajouter",
+    "none": "Aucune catégorie.",
+    "moveUp": "Monter",
+    "moveDown": "Descendre",
+    "deletePrompt": "Supprimer « {{name}} » ?",
+    "leaveUncategorized": "Laisser les éléments non classés",
+    "deletePages": "Supprimer les pages",
+    "unlinkResources": "Délier les ressources",
+    "iconLabel": "Icône"
+  },
+  "iconPicker": {
+    "label": "Choisir une icône",
+    "none": "Aucune icône"
   }
 }

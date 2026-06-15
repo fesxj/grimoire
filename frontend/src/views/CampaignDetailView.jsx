@@ -1,51 +1,225 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  LuScroll,
   LuUsers,
-  LuCalendar,
   LuNotebook,
   LuChevronLeft,
   LuSettings,
-  LuTrash2,
   LuUserPlus,
-  LuBookOpen,
+  LuCalendar,
   LuLink,
+  LuImagePlus,
+  LuLock,
 } from 'react-icons/lu'
 import api, { campaigns } from '../api'
 import { useAuth } from '../context/AuthContext'
 import Spinner from '../components/Spinner'
 import CampaignEditor from '../components/campaigns/CampaignEditor'
-import SessionList from '../components/campaigns/SessionList'
-import SessionNoteView from '../components/campaigns/SessionNoteView'
-import ScheduleTab from '../components/campaigns/ScheduleTab'
+import BannerUploadModal from '../components/campaigns/BannerUploadModal'
+import WikiView from '../components/campaigns/WikiView'
+import WikiMarkdown from '../components/campaigns/WikiMarkdown'
+import AvailabilityChart from '../components/campaigns/AvailabilityChart'
 import ResourcesPanel from '../components/campaigns/ResourcesPanel'
 import { MemberRow, InvitePanel } from '../components/campaigns/CampaignMembers'
+import { utcTimeToLocal, USER_TZ } from '../components/campaigns/_scheduleShared'
 
-const TAB_STYLE = (active) => ({
-  padding: '8px 16px',
-  borderRadius: 8,
-  cursor: 'pointer',
-  fontSize: 14,
-  fontWeight: active ? 600 : 400,
-  background: active ? 'var(--bg-card)' : 'transparent',
-  border: active ? '1px solid var(--border)' : '1px solid transparent',
-  color: active ? 'var(--gold)' : 'var(--text-dim)',
+const CARD = {
+  background: 'var(--bg-card)',
+  border: '1px solid var(--border)',
+  borderRadius: 12,
+  padding: '20px 22px',
+}
+
+// A fixed-height card whose body scrolls — used so Players and Schedule line up
+// at the same height regardless of how many players there are (room for ~4–5,
+// scroll past that up to the 8-player cap).
+const SCROLL_CARD = {
+  ...CARD,
+  height: 420,
+  display: 'flex',
+  flexDirection: 'column',
+}
+
+const GROUP_LABEL = {
+  fontSize: 11,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  color: 'var(--text-muted)',
+  fontWeight: 600,
+  margin: '4px 0 6px',
+}
+
+const SECTION_HEADING = {
+  fontSize: 15,
+  fontWeight: 600,
   display: 'flex',
   alignItems: 'center',
-  gap: 6,
-  whiteSpace: 'nowrap',
-  flexShrink: 0,
-})
+  gap: 8,
+}
+
+function BannerHero({ campaign, isOwner, onChanged }) {
+  const { t } = useTranslation()
+  const [showModal, setShowModal] = useState(false)
+  const [controlsVisible, setControlsVisible] = useState(false)
+  const hoverTimer = useRef(null)
+
+  // Reveal the Edit control only after hovering the banner for >1s.
+  const onEnter = () => {
+    if (!isOwner) return
+    hoverTimer.current = setTimeout(() => setControlsVisible(true), 1000)
+  }
+  const onLeave = () => {
+    clearTimeout(hoverTimer.current)
+    setControlsVisible(false)
+  }
+
+  // Bust the browser cache after a re-upload by keying on updated_at.
+  const bannerSrc = campaign.has_banner
+    ? `${campaigns.bannerUrl(campaign.id)}&v=${encodeURIComponent(campaign.updated_at)}`
+    : null
+
+  if (!campaign.has_banner && !isOwner) return null
+
+  return (
+    <div
+      onMouseEnter={onEnter}
+      onMouseLeave={onLeave}
+      style={{
+        position: 'relative',
+        // Cap at the 1600×800 (2:1) suggested size, scaling down on narrow screens
+        // but never stretching past the aspect ratio.
+        width: '100%',
+        maxWidth: 800,
+        aspectRatio: '2 / 1',
+        borderRadius: 12,
+        overflow: 'hidden',
+        background: 'var(--bg-deep)',
+        border: '1px solid var(--border)',
+      }}
+    >
+      {bannerSrc ? (
+        <img
+          src={bannerSrc}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+        />
+      ) : (
+        <button
+          onClick={() => setShowModal(true)}
+          style={{
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-muted)',
+            gap: 8,
+            background: 'none',
+            border: 'none',
+            cursor: isOwner ? 'pointer' : 'default',
+          }}
+        >
+          <LuImagePlus size={28} style={{ opacity: 0.4 }} />
+          <span style={{ fontSize: 13 }}>{t('campaignDetail.banner.empty')}</span>
+        </button>
+      )}
+
+      {/* Edit control — appears only after a >1s hover (or always when there's
+          no banner yet). */}
+      {isOwner && campaign.has_banner && controlsVisible && (
+        <div style={{ position: 'absolute', top: 10, right: 10 }}>
+          <button onClick={() => setShowModal(true)} style={bannerBtnStyle}>
+            <LuImagePlus size={13} /> {t('campaignDetail.banner.edit')}
+          </button>
+        </div>
+      )}
+
+      {showModal && (
+        <BannerUploadModal
+          hasBanner={campaign.has_banner}
+          previewSrc={bannerSrc}
+          onPick={async (file) => {
+            await campaigns.uploadBanner(campaign.id, file)
+            onChanged()
+          }}
+          onRemove={async () => {
+            await campaigns.deleteBanner(campaign.id)
+            onChanged()
+          }}
+          onClose={() => setShowModal(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+const bannerBtnStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 5,
+  padding: '6px 10px',
+  background: 'rgba(0,0,0,0.55)',
+  border: '1px solid rgba(255,255,255,0.15)',
+  borderRadius: 8,
+  color: '#fff',
+  cursor: 'pointer',
+  fontSize: 12,
+  backdropFilter: 'blur(2px)',
+}
+
+// Compact one-line schedule summary (e.g. "Weekly — Fri · 7:00 PM") for the meta row.
+function scheduleSummary(def, t) {
+  if (!def) return null
+  const FREQ = {
+    weekly: t('schedule.frequency.weekly'),
+    biweekly: t('schedule.frequency.biweekly'),
+    monthly: t('schedule.frequency.monthly'),
+    custom: t('schedule.frequency.custom'),
+  }
+  const DAY_NAMES = [
+    t('schedule.days.monday'),
+    t('schedule.days.tuesday'),
+    t('schedule.days.wednesday'),
+    t('schedule.days.thursday'),
+    t('schedule.days.friday'),
+    t('schedule.days.saturday'),
+    t('schedule.days.sunday'),
+  ]
+  const freq = FREQ[def.frequency] ?? def.frequency
+  let pattern = ''
+  if (def.frequency === 'custom') {
+    pattern = t('campaignDetail.overview.customDates', { count: def.custom_dates?.length ?? 0 })
+  } else if (def.frequency === 'monthly') {
+    const WEEKS = {
+      1: t('schedule.weeks.1st'),
+      2: t('schedule.weeks.2nd'),
+      3: t('schedule.weeks.3rd'),
+      4: t('schedule.weeks.4th'),
+      '-1': t('schedule.weeks.last'),
+    }
+    pattern = t('schedule.monthlyPattern', {
+      week: WEEKS[String(def.monthly_week)] ?? '',
+      day: DAY_NAMES[def.days?.[0]] ?? '',
+    })
+  } else {
+    pattern = (def.days ?? []).map((d) => DAY_NAMES[d]).join(' & ')
+  }
+  const time = utcTimeToLocal(def.time_utc)
+  const parts = [pattern ? `${freq} — ${pattern}` : freq]
+  if (time) parts.push(`${time} (${USER_TZ})`)
+  return parts.join(' · ')
+}
 
 export default function CampaignDetailView() {
   const { t } = useTranslation()
-  const { campaignId, tab = 'overview', sessionId } = useParams()
+  const { campaignId } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
   const [campaign, setCampaign] = useState(null)
   const [systems, setSystems] = useState([])
+  const [schedule, setSchedule] = useState(null)
   const [showEditor, setShowEditor] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
   const [error, setError] = useState(null)
@@ -57,13 +231,40 @@ export default function CampaignDetailView() {
       .catch((e) => setError(e.message))
   }
 
+  const [availability, setAvailability] = useState(null)
+
+  const loadSchedule = () => {
+    campaigns
+      .getSchedule(campaignId)
+      .then(setSchedule)
+      .catch(() => setSchedule(null))
+  }
+
+  const loadAvailability = () => {
+    campaigns
+      .getAvailability(campaignId)
+      .then(setAvailability)
+      .catch(() => setAvailability(null))
+  }
+
   useEffect(() => {
     load()
+    loadSchedule()
+    loadAvailability()
     api
       .get('/systems')
       .then(setSystems)
       .catch(() => {})
   }, [campaignId])
+
+  const handleSetAvailability = async (date, status) => {
+    await campaigns.setAvailability(campaignId, date, { status })
+    loadAvailability()
+  }
+  const handleCancelDate = async (date) => {
+    await campaigns.cancelDate(campaignId, date)
+    loadAvailability()
+  }
 
   if (error) {
     return (
@@ -98,6 +299,17 @@ export default function CampaignDetailView() {
   const isOwner = campaign.owner_id === user?.id || user?.role === 'admin'
   const isGmCampaign = campaign.is_gm_campaign
 
+  // The campaign is locked (read-only for everyone) when the owner's campaign
+  // access is disabled. The current user also loses management when their own
+  // access is disabled. Backend enforces this; the UI only reflects it.
+  const selfDisabled = user?.campaign_access === false
+  const canManage = isOwner && !campaign.locked && !selfDisabled
+  const readOnlyNotice = campaign.locked
+    ? t('campaigns.readOnlyLocked')
+    : selfDisabled && isOwner
+      ? t('campaigns.readOnlySelf')
+      : null
+
   const deleteCampaign = async () => {
     if (!confirm(t('campaignDetail.deleteConfirm', { name: campaign.name }))) return
     await campaigns.delete(campaign.id)
@@ -120,42 +332,65 @@ export default function CampaignDetailView() {
     load()
   }
 
-  if (sessionId) {
-    return (
-      <SessionNoteView
-        campaign={campaign}
-        sessionId={sessionId}
-        isOwner={isOwner}
-        userId={user?.id}
-        onBack={() => navigate(-1)}
-      />
-    )
-  }
-
   return (
-    <div className="fade-in" style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <button
-          onClick={() => navigate('/campaigns')}
+    <div className="fade-in" style={{ padding: 24 }}>
+      {/* Back link */}
+      <button
+        onClick={() => navigate('/campaigns')}
+        style={{
+          background: 'none',
+          border: 'none',
+          color: 'var(--text-muted)',
+          cursor: 'pointer',
+          fontSize: 13,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: 0,
+          marginBottom: 12,
+        }}
+      >
+        <LuChevronLeft size={14} /> {t('campaignDetail.backToCampaigns')}
+      </button>
+
+      {readOnlyNotice && (
+        <div
           style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            fontSize: 13,
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
-            padding: 0,
-            marginBottom: 12,
+            gap: 8,
+            padding: '10px 14px',
+            marginBottom: 16,
+            background: 'var(--bg-deep)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            color: 'var(--text-dim)',
+            fontSize: 13,
           }}
         >
-          <LuChevronLeft size={14} /> {t('campaignDetail.backToCampaigns')}
-        </button>
+          <LuLock size={15} aria-hidden="true" /> {readOnlyNotice}
+        </div>
+      )}
+
+      {/* Banner + header — banner on the left, title/details/actions fill the space
+          to its right; wraps to stacked on narrow screens. */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 20,
+          alignItems: 'flex-start',
+          marginBottom: 24,
+        }}
+      >
+        <div style={{ flex: '1 1 360px', minWidth: 280, maxWidth: 800 }}>
+          <BannerHero campaign={campaign} isOwner={canManage} onChanged={load} />
+        </div>
 
         <div
           style={{
+            flex: '1 1 320px',
+            minWidth: 280,
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
@@ -194,22 +429,88 @@ export default function CampaignDetailView() {
               )}
             </div>
             {campaign.description && (
-              <p
+              <div
                 style={{
-                  fontSize: 14,
+                  fontSize: 16,
                   color: 'var(--text-dim)',
-                  marginTop: 8,
-                  lineHeight: 1.6,
-                  maxWidth: 600,
+                  marginTop: 10,
+                  maxWidth: 700,
                 }}
               >
-                {campaign.description}
-              </p>
+                <WikiMarkdown body={campaign.description} />
+              </div>
             )}
+
+            {/* Details — sits beside the banner under the title. */}
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px 24px',
+                marginTop: 16,
+                fontSize: 15,
+                color: 'var(--text-muted)',
+              }}
+            >
+              <span>
+                {t('campaignDetail.overview.type')}:{' '}
+                <span style={{ color: 'var(--text-dim)' }}>
+                  {campaign.is_gm_campaign
+                    ? t('campaignDetail.overview.gmCampaignType')
+                    : t('campaignDetail.overview.personalCampaignType')}
+                </span>
+              </span>
+              {campaign.system_id ? (
+                <span>
+                  {t('campaignDetail.overview.system')}:{' '}
+                  <Link
+                    to={`/library/system/${campaign.system_id}`}
+                    style={{ color: 'var(--gold)', textDecoration: 'none' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
+                    onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
+                  >
+                    {systems.find((s) => s.id === campaign.system_id)?.name ?? '—'}
+                  </Link>
+                </span>
+              ) : (
+                campaign.system_name && (
+                  <span>
+                    {t('campaignDetail.overview.system')}:{' '}
+                    <span style={{ color: 'var(--text-dim)' }}>{campaign.system_name}</span>
+                  </span>
+                )
+              )}
+              {isGmCampaign && schedule?.definition && (
+                <span>
+                  {t('campaignDetail.tabs.schedule')}:{' '}
+                  <span style={{ color: 'var(--text-dim)' }}>
+                    {scheduleSummary(schedule.definition, t)}
+                  </span>
+                </span>
+              )}
+            </div>
           </div>
 
-          {isOwner && (
-            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => navigate(`/campaigns/${campaignId}/notes`)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 14px',
+                background: 'var(--gold)',
+                border: 'none',
+                borderRadius: 8,
+                color: '#1a1209',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 600,
+              }}
+            >
+              <LuNotebook size={15} /> {t('campaignDetail.openNotes')}
+            </button>
+            {canManage && (
               <button
                 onClick={() => setShowEditor(true)}
                 style={{
@@ -227,225 +528,142 @@ export default function CampaignDetailView() {
               >
                 <LuSettings size={14} /> {t('campaignDetail.edit')}
               </button>
-              <button
-                onClick={deleteCampaign}
-                aria-label={t('campaignDetail.deleteAriaLabel')}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 5,
-                  padding: '7px 12px',
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 8,
-                  color: 'var(--danger)',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                }}
-              >
-                <LuTrash2 size={14} aria-hidden="true" />
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Players + Schedule: two equal-height columns that scroll internally. */}
       <div
         style={{
-          display: 'flex',
-          gap: 4,
-          marginBottom: 24,
-          overflowX: 'auto',
-          WebkitOverflowScrolling: 'touch',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+          gap: 20,
+          alignItems: 'start',
+          marginBottom: 20,
         }}
       >
-        <button
-          style={TAB_STYLE(tab === 'overview')}
-          onClick={() => navigate(`/campaigns/${campaignId}/overview`)}
-        >
-          <LuUsers size={14} /> {t('campaignDetail.tabs.overview')}
-        </button>
-        <button
-          style={TAB_STYLE(tab === 'sessions')}
-          onClick={() => navigate(`/campaigns/${campaignId}/sessions`)}
-        >
-          <LuNotebook size={14} /> {t('campaignDetail.tabs.sessionNotes')}
-        </button>
-        {isGmCampaign && (isOwner || campaign.has_schedule) && (
-          <button
-            style={TAB_STYLE(tab === 'schedule')}
-            onClick={() => navigate(`/campaigns/${campaignId}/schedule`)}
-          >
-            <LuCalendar size={14} /> {t('campaignDetail.tabs.schedule')}
-          </button>
-        )}
-        <button
-          style={TAB_STYLE(tab === 'resources')}
-          onClick={() => navigate(`/campaigns/${campaignId}/resources`)}
-        >
-          <LuBookOpen size={14} /> {t('campaignDetail.tabs.resources')}
-        </button>
-      </div>
-
-      {/* Overview tab */}
-      {tab === 'overview' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div
-            style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 12,
-              padding: '20px 22px',
-            }}
-          >
-            <h3
-              style={{
-                fontSize: 15,
-                fontWeight: 600,
-                marginBottom: 16,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-              }}
-            >
-              <LuScroll size={15} /> {t('campaignDetail.overview.details')}
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>
-                  {t('campaignDetail.overview.type')}
-                </span>
-                <span>
-                  {campaign.is_gm_campaign
-                    ? t('campaignDetail.overview.gmCampaignType')
-                    : t('campaignDetail.overview.personalCampaignType')}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>
-                  {t('campaignDetail.overview.created')}
-                </span>
-                <span>{new Date(campaign.created_at).toLocaleDateString()}</span>
-              </div>
-              {campaign.system_id && (
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>
-                    {t('campaignDetail.overview.system')}
-                  </span>
-                  <Link
-                    to={`/library/system/${campaign.system_id}`}
-                    style={{ color: 'var(--gold)', textDecoration: 'none', fontSize: 14 }}
-                    onMouseEnter={(e) => (e.currentTarget.style.textDecoration = 'underline')}
-                    onMouseLeave={(e) => (e.currentTarget.style.textDecoration = 'none')}
-                  >
-                    {systems.find((s) => s.id === campaign.system_id)?.name ?? '—'}
-                  </Link>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {isGmCampaign && (
-            <div
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
-                borderRadius: 12,
-                padding: '20px 22px',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: 16,
-                }}
-              >
-                <h3
+        {/* Players (GM listed separately above the player list) */}
+        {isGmCampaign &&
+          (() => {
+            const gmMember = campaign.members?.find((m) => m.is_owner)
+            const playerMembers = campaign.members?.filter((m) => !m.is_owner) ?? []
+            return (
+              <div style={SCROLL_CARD}>
+                <div
                   style={{
-                    fontSize: 15,
-                    fontWeight: 600,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 8,
+                    justifyContent: 'space-between',
+                    marginBottom: 14,
                   }}
                 >
-                  <LuUsers size={15} /> {t('campaignDetail.overview.members')}
-                </h3>
-                {isOwner && (
-                  <button
-                    onClick={() => setShowInvite(!showInvite)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      padding: '5px 10px',
-                      background: 'var(--bg-deep)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 6,
-                      color: 'var(--text-dim)',
-                      cursor: 'pointer',
-                      fontSize: 12,
+                  <h3 style={SECTION_HEADING}>
+                    <LuUsers size={15} /> {t('campaignDetail.overview.members')}
+                  </h3>
+                  {canManage && (
+                    <button
+                      onClick={() => setShowInvite(!showInvite)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        padding: '5px 10px',
+                        background: 'var(--bg-deep)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 6,
+                        color: 'var(--text-dim)',
+                        cursor: 'pointer',
+                        fontSize: 12,
+                      }}
+                    >
+                      <LuUserPlus size={12} /> {t('campaignDetail.overview.invite')}
+                    </button>
+                  )}
+                </div>
+
+                {showInvite && (
+                  <InvitePanel
+                    campaignId={campaign.id}
+                    onInvited={() => {
+                      setShowInvite(false)
+                      load()
                     }}
-                  >
-                    <LuUserPlus size={12} /> {t('campaignDetail.overview.invite')}
-                  </button>
+                  />
                 )}
-              </div>
 
-              {showInvite && (
-                <InvitePanel
-                  campaignId={campaign.id}
-                  onInvited={() => {
-                    setShowInvite(false)
-                    load()
-                  }}
-                />
-              )}
+                <div style={{ overflowY: 'auto', flex: 1, marginRight: -8, paddingRight: 8 }}>
+                  {/* Game Master — kept distinct from the player roster. */}
+                  {gmMember && (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={GROUP_LABEL}>{t('campaignDetail.overview.gameMaster')}</div>
+                      <MemberRow
+                        member={gmMember}
+                        isOwner={isOwner}
+                        canManage={canManage}
+                        currentUserId={user?.id}
+                        campaignId={campaign.id}
+                        onRemove={handleRemoveMember}
+                        onUpdateStatus={handleUpdateMember}
+                        onSetCharacterName={handleSetCharacterName}
+                        onMediaChanged={load}
+                      />
+                    </div>
+                  )}
 
-              <div>
-                {campaign.members?.length === 0 ? (
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)', paddingTop: 8 }}>
-                    {t('campaignDetail.overview.noMembers')}
+                  <div style={GROUP_LABEL}>
+                    {t('campaignDetail.overview.players')} ({playerMembers.length})
                   </div>
-                ) : (
-                  campaign.members.map((m) => (
-                    <MemberRow
-                      key={m.user_id}
-                      member={m}
-                      isOwner={isOwner}
-                      canManage={isOwner}
-                      currentUserId={user?.id}
-                      onRemove={handleRemoveMember}
-                      onUpdateStatus={handleUpdateMember}
-                      onSetCharacterName={handleSetCharacterName}
-                    />
-                  ))
-                )}
+                  {playerMembers.length === 0 ? (
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)', paddingTop: 4 }}>
+                      {t('campaignDetail.overview.noMembers')}
+                    </div>
+                  ) : (
+                    playerMembers.map((m) => (
+                      <MemberRow
+                        key={m.user_id}
+                        member={m}
+                        isOwner={isOwner}
+                        canManage={canManage}
+                        currentUserId={user?.id}
+                        campaignId={campaign.id}
+                        onRemove={handleRemoveMember}
+                        onUpdateStatus={handleUpdateMember}
+                        onSetCharacterName={handleSetCharacterName}
+                        onMediaChanged={load}
+                      />
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )
+          })()}
 
-      {tab === 'sessions' && (
-        <SessionList
-          campaign={campaign}
-          isOwner={isOwner}
-          onSelectSession={(sid) => navigate(`/campaigns/${campaignId}/sessions/${sid}`)}
-          userId={user?.id}
-        />
-      )}
+        {/* Availability — players mark upcoming sessions. Schedule setup lives in
+            the edit modal; here we only show the chart when a schedule exists. */}
+        {isGmCampaign && schedule?.definition && schedule?.enabled && (
+          <div style={SCROLL_CARD}>
+            <h3 style={{ ...SECTION_HEADING, marginBottom: 14, flexShrink: 0 }}>
+              <LuCalendar size={15} /> {t('campaignDetail.overview.availability')}
+            </h3>
+            {/* Single section: the chart fills the card, scrolls internally with a
+                pinned date header, and keeps its legend at the bottom. */}
+            <AvailabilityChart
+              availability={availability}
+              userId={user?.id}
+              isOwner={canManage}
+              onSetAvailability={handleSetAvailability}
+              onCancelDate={handleCancelDate}
+            />
+          </div>
+        )}
+      </div>
 
-      {tab === 'schedule' && isGmCampaign && (
-        <ScheduleTab campaign={campaign} isOwner={isOwner} userId={user?.id} />
-      )}
-
-      {tab === 'resources' && (
-        <ResourcesPanel campaign={campaign} isOwner={isOwner} onRefresh={load} />
-      )}
+      {/* Resources — full width below the two-column row. ResourcesPanel renders
+          its own single title + action buttons. */}
+      <div style={CARD}>
+        <ResourcesPanel campaign={campaign} isOwner={canManage} onRefresh={load} />
+      </div>
 
       {showEditor && (
         <CampaignEditor
@@ -455,6 +673,11 @@ export default function CampaignDetailView() {
           onSaved={(updated) => {
             setCampaign((prev) => ({ ...prev, ...updated }))
             setShowEditor(false)
+          }}
+          onDelete={deleteCampaign}
+          onScheduleChanged={() => {
+            loadSchedule()
+            loadAvailability()
           }}
         />
       )}

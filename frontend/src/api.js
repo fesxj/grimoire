@@ -39,15 +39,39 @@ export const campaigns = {
   updateMember: (id, userId, status) => api.patch(`/campaigns/${id}/members/${userId}`, { status }),
   setCharacterName: (id, userId, character_name) =>
     api.patch(`/campaigns/${id}/members/${userId}`, { character_name }),
+  setCharacterSheetUrl: (id, userId, character_sheet_url) =>
+    api.patch(`/campaigns/${id}/members/${userId}`, { character_sheet_url }),
   removeMember: (id, userId) => api.delete(`/campaigns/${id}/members/${userId}`),
   eligibleMembers: (id) => api.get(`/campaigns/${id}/eligible-members`),
+
+  // Banner (keyed by campaign id)
+  uploadBanner: (id, file) => api.upload(`/campaigns/${id}/banner`, file),
+  deleteBanner: (id) => api.delete(`/campaigns/${id}/banner`),
+  bannerUrl: (id) => mediaUrl(`/campaigns/${id}/banner`),
+
+  // Character art & sheet (keyed by CampaignMember id)
+  uploadMemberArt: (id, memberId, file) =>
+    api.upload(`/campaigns/${id}/members/${memberId}/art`, file),
+  deleteMemberArt: (id, memberId) => api.delete(`/campaigns/${id}/members/${memberId}/art`),
+  memberArtUrl: (id, memberId) => mediaUrl(`/campaigns/${id}/members/${memberId}/art`),
+  uploadMemberSheet: (id, memberId, file) =>
+    api.upload(`/campaigns/${id}/members/${memberId}/sheet`, file),
+  deleteMemberSheet: (id, memberId) => api.delete(`/campaigns/${id}/members/${memberId}/sheet`),
+  memberSheetUrl: (id, memberId) => mediaUrl(`/campaigns/${id}/members/${memberId}/sheet`),
 
   // Resources
   listResources: (id) => api.get(`/campaigns/${id}/resources`),
   addResource: (id, data) => api.post(`/campaigns/${id}/resources`, data),
-  updateResource: (id, resourceId, shared) =>
-    api.patch(`/campaigns/${id}/resources/${resourceId}`, { shared }),
+  updateResource: (id, resourceId, patch) =>
+    api.patch(`/campaigns/${id}/resources/${resourceId}`, patch),
+  reorderResources: (id, orderedIds) =>
+    api.put(`/campaigns/${id}/resources/reorder`, { ordered_ids: orderedIds }),
   removeResource: (id, resourceId) => api.delete(`/campaigns/${id}/resources/${resourceId}`),
+  suggestedResources: (systemId) => api.get(`/campaigns/resources/suggested/${systemId}`),
+
+  // GM-uploaded campaign files (linked as resource_type='file')
+  uploadFile: (id, file) => api.upload(`/campaigns/${id}/files`, file),
+  fileUrl: (id, fileId) => mediaUrl(`/campaigns/${id}/files/${fileId}`),
   searchResources: (q = '', resourceType = '') => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
@@ -68,6 +92,32 @@ export const campaigns = {
     api.put(`/campaigns/${id}/sessions/${sessionId}/notes/gm`, data),
   searchSessions: (id, q) => api.get(`/campaigns/${id}/sessions/search?q=${encodeURIComponent(q)}`),
 
+  // Wiki pages
+  listWikiPages: (id) => api.get(`/campaigns/${id}/wiki`),
+  getWikiPage: (id, pageId) => api.get(`/campaigns/${id}/wiki/${pageId}`),
+  createWikiPage: (id, data) => api.post(`/campaigns/${id}/wiki`, data),
+  updateWikiPage: (id, pageId, data) => api.patch(`/campaigns/${id}/wiki/${pageId}`, data),
+  deleteWikiPage: (id, pageId) => api.delete(`/campaigns/${id}/wiki/${pageId}`),
+  searchWiki: (id, q) => api.get(`/campaigns/${id}/wiki/search?q=${encodeURIComponent(q)}`),
+  wikiTitles: (id) => api.get(`/campaigns/${id}/wiki/titles`),
+  reorderWikiPages: (id, orderedIds) =>
+    api.put(`/campaigns/${id}/wiki/reorder`, { ordered_ids: orderedIds }),
+
+  // Categories (kind: 'note' | 'resource')
+  listCategories: (id, kind) =>
+    api.get(`/campaigns/${id}/categories${kind ? `?kind=${kind}` : ''}`),
+  createCategory: (id, name, kind, icon) =>
+    api.post(`/campaigns/${id}/categories`, { name, kind, icon }),
+  updateCategory: (id, categoryId, patch) =>
+    api.patch(`/campaigns/${id}/categories/${categoryId}`, patch),
+  renameCategory: (id, categoryId, name) =>
+    api.patch(`/campaigns/${id}/categories/${categoryId}`, { name }),
+  reorderCategories: (id, orderedIds) =>
+    api.put(`/campaigns/${id}/categories/reorder`, { ordered_ids: orderedIds }),
+  // mode: 'uncategorize' | 'delete_items'
+  deleteCategory: (id, categoryId, mode) =>
+    api.delete(`/campaigns/${id}/categories/${categoryId}?mode=${mode}`),
+
   // Schedule
   getSchedule: (id) => api.get(`/campaigns/${id}/schedule`),
   setSchedule: (id, data) => api.put(`/campaigns/${id}/schedule`, data),
@@ -77,6 +127,9 @@ export const campaigns = {
   getAvailability: (id) => api.get(`/campaigns/${id}/availability`),
   setAvailability: (id, date, data) => api.put(`/campaigns/${id}/availability/${date}`, data),
   cancelDate: (id, date) => api.put(`/campaigns/${id}/availability/${date}/cancel`),
+
+  // Admin: read-only view of a user's campaigns (user page)
+  adminListByUser: (userId) => api.get(`/campaigns/admin/by-user/${userId}`),
 }
 
 export const opds = {
@@ -119,6 +172,17 @@ const api = {
 
   delete: (url) =>
     fetch(`/api${url}`, { method: 'DELETE', headers: authHeaders() }).then(handleResponse),
+
+  // Multipart upload — do NOT set Content-Type so the browser adds the boundary.
+  upload: (url, file) => {
+    const form = new FormData()
+    form.append('file', file)
+    return fetch(`/api${url}`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: form,
+    }).then(handleResponse)
+  },
 }
 
 export default api

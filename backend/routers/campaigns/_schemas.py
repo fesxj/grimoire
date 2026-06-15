@@ -4,6 +4,13 @@ from typing import Optional, List
 from pydantic import BaseModel
 
 
+class CampaignResourceInput(BaseModel):
+    resource_type: str  # book | map | token | file
+    resource_id: str
+    visibility: str = "gm"  # public | private | gm
+    shared_user_ids: Optional[List[str]] = None  # for private visibility
+
+
 class CampaignCreate(BaseModel):
     name: str
     description: str = ""
@@ -11,6 +18,10 @@ class CampaignCreate(BaseModel):
     gm_title: str = "Game Master"
     parent_campaign_id: Optional[str] = None
     system_id: Optional[str] = None
+    system_name: Optional[str] = None  # free text for a system not in the library
+    # Explicit resources chosen in the create wizard. When omitted (None), no
+    # resources are linked. An empty list also links nothing.
+    resources: Optional[List[CampaignResourceInput]] = None
 
 
 class CampaignUpdate(BaseModel):
@@ -18,6 +29,7 @@ class CampaignUpdate(BaseModel):
     description: Optional[str] = None
     gm_title: Optional[str] = None
     system_id: Optional[str] = None
+    system_name: Optional[str] = None  # "" clears it
     parent_campaign_id: Optional[str] = None
 
 
@@ -28,16 +40,42 @@ class InvitePayload(BaseModel):
 class MemberStatusUpdate(BaseModel):
     status: Optional[str] = None  # accepted | declined
     character_name: Optional[str] = None
+    character_sheet_url: Optional[str] = None  # "" clears it
 
 
 class ResourceAdd(BaseModel):
-    resource_type: str  # book | map | token
+    resource_type: str  # book | map | token | file
     resource_id: str
-    shared: bool = False
+    visibility: str = "gm"  # public | private | gm
+    shared_user_ids: Optional[List[str]] = None  # for private visibility
+    category_id: Optional[str] = None
 
 
 class ResourceUpdate(BaseModel):
-    shared: bool
+    visibility: Optional[str] = None  # public | private | gm
+    shared_user_ids: Optional[List[str]] = None
+    # Use the sentinel "" to clear the category (move back to the built-in type group).
+    category_id: Optional[str] = None
+
+
+class ResourceReorder(BaseModel):
+    ordered_ids: List[str]
+
+
+class CategoryCreate(BaseModel):
+    name: str
+    kind: str  # note | resource
+    icon: Optional[str] = None  # Lucide icon name
+
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    icon: Optional[str] = None  # "" clears it
+
+
+class CategoryReorder(BaseModel):
+    # Ordered list of category ids defining the new sort order.
+    ordered_ids: List[str]
 
 
 class SessionNoteCreate(BaseModel):
@@ -65,9 +103,37 @@ class ScheduleUpsert(BaseModel):
     biweekly_reference: Optional[str] = None  # YYYY-MM-DD anchor for biweekly
     monthly_week: Optional[int] = None  # 1-4 or -1 (last) for monthly
     custom_dates: Optional[List[str]] = None  # ["YYYY-MM-DD", ...] for custom
+    enabled: bool = True  # when False the definition is kept but inactive
 
 
 class AvailabilityUpdate(BaseModel):
     status: str  # available | tentative | unavailable
     is_cancelled: Optional[bool] = None  # GM only
     user_id: Optional[int] = None  # GM/admin only — set another member's availability
+
+
+class WikiPageCreate(BaseModel):
+    title: str = ""
+    body: str = ""
+    visibility: str = "gm"  # gm | group | members
+    page_type: str = "note"  # note | session
+    session_date: Optional[str] = None  # YYYY-MM-DD for session pages
+    shared_user_ids: Optional[List[str]] = None  # for members visibility
+    category_id: Optional[str] = None
+    icon: Optional[str] = None  # Lucide icon name
+
+
+class WikiPageUpdate(BaseModel):
+    title: Optional[str] = None
+    body: Optional[str] = None
+    visibility: Optional[str] = None
+    page_type: Optional[str] = None
+    session_date: Optional[str] = None
+    shared_user_ids: Optional[List[str]] = None
+    # Use the sentinel "" to clear the category (move to Uncategorized).
+    category_id: Optional[str] = None
+    icon: Optional[str] = None  # "" clears it
+
+
+class WikiReorder(BaseModel):
+    ordered_ids: List[str]

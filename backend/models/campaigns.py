@@ -5,6 +5,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     JSON,
     String,
     Text,
@@ -29,9 +30,16 @@ class Campaign(Base):
     gm_title = Column(String(100), default="Game Master")
     parent_campaign_id = Column(String(36), ForeignKey("campaigns.id"), nullable=True)
     system_id = Column(String(36), ForeignKey("game_systems.id"), nullable=True)
+    # Free-text system name for a system not in the library (used when system_id is null).
+    system_name = Column(String(255), nullable=True)
+
+    # Relative filename of the campaign banner, stored under DATA_PATH/campaign_uploads/banners/
+    banner_path = Column(String(255), nullable=True)
 
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+    # Last time any user opened the campaign — drives "recently accessed" sorting.
+    last_accessed_at = Column(DateTime, default=_utcnow)
 
     members = relationship(
         "CampaignMember", back_populates="campaign", cascade="all, delete-orphan"
@@ -51,6 +59,15 @@ class Campaign(Base):
     availability = relationship(
         "SessionAvailability", back_populates="campaign", cascade="all, delete-orphan"
     )
+    wiki_pages = relationship(
+        "WikiPage", back_populates="campaign", cascade="all, delete-orphan"
+    )
+    categories = relationship(
+        "CampaignCategory", back_populates="campaign", cascade="all, delete-orphan"
+    )
+    files = relationship(
+        "CampaignFile", back_populates="campaign", cascade="all, delete-orphan"
+    )
 
 
 class CampaignMember(Base):
@@ -64,6 +81,13 @@ class CampaignMember(Base):
     status = Column(String(20), default="invited")
     character_name = Column(String(100), nullable=True)
 
+    # Relative filenames under DATA_PATH/campaign_uploads/{art,sheets}/
+    character_art_path = Column(String(255), nullable=True)
+    character_sheet_path = Column(String(255), nullable=True)
+    character_sheet_filename = Column(String(255), nullable=True)  # original upload name
+    # Alternatively, a link to an external sheet (e.g. D&D Beyond or a hosted PDF).
+    character_sheet_url = Column(String(1000), nullable=True)
+
     created_at = Column(DateTime, default=_utcnow)
 
     campaign = relationship("Campaign", back_populates="members")
@@ -72,17 +96,32 @@ class CampaignMember(Base):
 
 
 class CampaignResource(Base):
-    """A book, map, token, or system linked to a campaign."""
+    """A book, map, token, file, or system linked to a campaign."""
 
     __tablename__ = "campaign_resources"
 
     id = Column(String(36), primary_key=True, default=_uuid)
     campaign_id = Column(String(36), ForeignKey("campaigns.id"), nullable=False, index=True)
-    resource_type = Column(String(20), nullable=False)
+    resource_type = Column(String(20), nullable=False)  # book | map | token | file
     resource_id = Column(String(36), nullable=False)
+    # Visibility:
+    #   public  — every accepted member sees it
+    #   private — only the users in `shares` (plus the GM) see it
+    #   gm      — only the GM (owner) sees it
+    visibility = Column(String(20), default="gm")
+    # Legacy flags, retained only so existing rows can be migrated to `visibility`.
     shared = Column(Boolean, default=False)
+    gm_only = Column(Boolean, default=False)
+    # Optional GM-defined category. When null, the resource groups under its
+    # built-in type group (Books / Maps / Tokens / Files).
+    category_id = Column(String(36), ForeignKey("campaign_categories.id"), nullable=True)
+    # Manual ordering within a category/type group (drag-and-drop).
+    sort_order = Column(Integer, default=0)
 
     campaign = relationship("Campaign", back_populates="resources")
+    shares = relationship(
+        "CampaignResourceShare", back_populates="resource", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (UniqueConstraint("campaign_id", "resource_type", "resource_id"),)
 
@@ -149,6 +188,9 @@ class CampaignSchedule(Base):
     id = Column(String(36), primary_key=True, default=_uuid)
     campaign_id = Column(String(36), ForeignKey("campaigns.id"), nullable=False, unique=True)
     definition = Column(JSON, default=dict)
+    # When disabled the definition is preserved but the schedule is treated as
+    # inactive (no next session, no availability chart).
+    enabled = Column(Boolean, default=True, nullable=False)
 
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -170,3 +212,130 @@ class SessionAvailability(Base):
     campaign = relationship("Campaign", back_populates="availability")
 
     __table_args__ = (UniqueConstraint("campaign_id", "user_id", "session_date"),)
+
+
+class WikiPage(Base):
+    """A markdown wiki page in a campaign — the campaign-building notebook.
+
+    visibility:
+      - gm:      only the campaign owner can see it
+      - group:   all accepted members can see it
+      - members: only the owner and the users in `shares` can see it
+    """
+
+    __tablename__ = "wiki_pages"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    campaign_id = Column(String(36), ForeignKey("campaigns.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False, default="")
+    # Normalized title used to resolve [[wiki links]]; unique within a campaign.
+    slug = Column(String(255), nullable=False, index=True)
+    body = Column(Text, default="")
+    visibility = Column(String(20), default="gm")  # gm | group | members
+    page_type = Column(String(20), default="note")  # note | session
+    session_date = Column(String(10), nullable=True)  # YYYY-MM-DD for session pages
+    created_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    # Optional GM-defined notes group. When null, the page is "Uncategorized".
+    category_id = Column(String(36), ForeignKey("campaign_categories.id"), nullable=True)
+    # Optional Lucide icon name (e.g. "user", "swords") shown in the page list.
+    icon = Column(String(50), nullable=True)
+    # Manual ordering within the page list (drag-and-drop).
+    sort_order = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=_utcnow)
+    updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    campaign = relationship("Campaign", back_populates="wiki_pages")
+    shares = relationship(
+        "WikiPageShare", back_populates="page", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (UniqueConstraint("campaign_id", "slug"),)
+
+
+class WikiPageShare(Base):
+    """A user a `members`-visibility wiki page is shared with."""
+
+    __tablename__ = "wiki_page_shares"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    page_id = Column(String(36), ForeignKey("wiki_pages.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+
+    page = relationship("WikiPage", back_populates="shares")
+
+    __table_args__ = (UniqueConstraint("page_id", "user_id"),)
+
+
+class WikiPageLink(Base):
+    """A resolved [[wiki link]] from one page to another, for backlinks.
+
+    Rebuilt from the source page's body on every save.
+    """
+
+    __tablename__ = "wiki_page_links"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    campaign_id = Column(String(36), ForeignKey("campaigns.id"), nullable=False, index=True)
+    source_page_id = Column(String(36), ForeignKey("wiki_pages.id"), nullable=False, index=True)
+    target_page_id = Column(String(36), ForeignKey("wiki_pages.id"), nullable=False, index=True)
+
+    __table_args__ = (UniqueConstraint("source_page_id", "target_page_id"),)
+
+
+class CampaignCategory(Base):
+    """A GM-defined grouping for either wiki pages or linked resources.
+
+    `kind` keeps the two namespaces separate: a note category never holds a
+    resource and vice-versa. `sort_order` is GM-rearrangeable.
+    """
+
+    __tablename__ = "campaign_categories"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    campaign_id = Column(String(36), ForeignKey("campaigns.id"), nullable=False, index=True)
+    kind = Column(String(20), nullable=False)  # note | resource
+    name = Column(String(255), nullable=False)
+    # Optional Lucide icon name shown beside the category.
+    icon = Column(String(50), nullable=True)
+    sort_order = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=_utcnow)
+
+    campaign = relationship("Campaign", back_populates="categories")
+
+
+class CampaignResourceShare(Base):
+    """A user a `private`-visibility resource is shared with."""
+
+    __tablename__ = "campaign_resource_shares"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    resource_id = Column(String(36), ForeignKey("campaign_resources.id"), nullable=False, index=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+
+    resource = relationship("CampaignResource", back_populates="shares")
+
+    __table_args__ = (UniqueConstraint("resource_id", "user_id"),)
+
+
+class CampaignFile(Base):
+    """A GM-uploaded file attached to a campaign, stored under DATA_PATH.
+
+    Surfaced as a linked resource via CampaignResource(resource_type='file',
+    resource_id=<this id>). Not part of the shared library.
+    """
+
+    __tablename__ = "campaign_files"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    campaign_id = Column(String(36), ForeignKey("campaigns.id"), nullable=False, index=True)
+    stored_path = Column(String(255), nullable=False)  # relative filename on disk
+    filename = Column(String(255), nullable=False)  # original upload name
+    mime_type = Column(String(100), default="application/octet-stream")
+    size_bytes = Column(Integer, default=0)
+    uploaded_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+
+    created_at = Column(DateTime, default=_utcnow)
+
+    campaign = relationship("Campaign", back_populates="files")

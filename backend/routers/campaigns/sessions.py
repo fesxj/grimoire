@@ -225,7 +225,7 @@ def delete_session(
     db = SessionLocal()
     try:
         c = get_campaign_or_404(db, campaign_id)
-        assert_can_manage(c, current_user)
+        assert_can_manage(c, current_user, db)
         session = db.query(SessionNote).filter_by(id=session_id, campaign_id=campaign_id).first()
         if session:
             db.delete(session)
@@ -277,7 +277,7 @@ def upsert_gm_note(
     db = SessionLocal()
     try:
         c = get_campaign_or_404(db, campaign_id)
-        assert_can_manage(c, current_user)
+        assert_can_manage(c, current_user, db)
 
         session = db.query(SessionNote).filter_by(id=session_id, campaign_id=campaign_id).first()
         if not session:

@@ -297,6 +297,8 @@ Pages nest: each page has an optional `parent_id` (null = top level), forming a 
 
 Each page has a **visibility**: `gm` (owner only), `group` (all accepted members), or `members` (owner plus the users in `shared_user_ids`). The owner may create/edit/delete any page; a member may create `group` pages and edit/delete pages they authored, but cannot set `gm`/`members` visibility.
 
+Within a page body, text wrapped in `||double pipes||` is a **GM-only secret** — finer-grained than page visibility, it hides a span inside an otherwise shared page. Those spans (markers and enclosed text, which may span multiple lines) are stripped server-side from the `body` returned to anyone other than the campaign owner, and from `search` snippets/matches for non-owners. The owner always receives the raw `||...||`. Personal (non-GM) campaigns are never stripped, since only the owner can view them.
+
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
 | `/api/campaigns/:id/wiki` | GET | member or owner | List pages the caller can see (`id, title, slug, visibility, page_type, session_date, parent_id, icon, sort_order, updated_at, can_edit`), ordered by `sort_order`. Build the page tree client-side from `parent_id` |

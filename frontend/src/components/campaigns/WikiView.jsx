@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import {
   LuPlus,
@@ -11,12 +12,14 @@ import {
   LuLink2,
   LuBookOpen,
   LuEye,
+  LuEyeOff,
   LuArrowLeft,
   LuFileText,
   LuDownload,
   LuUpload,
   LuChevronRight,
   LuChevronDown,
+  LuCheck,
 } from 'react-icons/lu'
 import { campaigns } from '../../api'
 import Spinner from '../Spinner'
@@ -44,10 +47,29 @@ function descendantIds(pageId, pages) {
   return out
 }
 
+// Visibility colour coding: GM-only is the app's red, Private uses the same gold
+// as default icons, and Public is plain white/foreground.
 const VIS_META = {
-  gm: { Icon: LuShield, color: 'var(--gold)', key: 'gm' },
-  group: { Icon: LuUsers, color: 'var(--text-dim)', key: 'group' },
-  members: { Icon: LuLock, color: '#a78bfa', key: 'members' },
+  gm: { Icon: LuShield, color: 'var(--red)', key: 'gm' },
+  group: { Icon: LuUsers, color: 'var(--text)', key: 'group' },
+  members: { Icon: LuLock, color: 'var(--gold)', key: 'members' },
+}
+
+function badgeStyle(meta, interactive) {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    fontSize: 11,
+    color: meta.color,
+    background: 'transparent',
+    border: `1px solid var(--border)`,
+    borderRadius: 12,
+    padding: '1px 8px',
+    cursor: interactive ? 'pointer' : 'default',
+    font: 'inherit',
+    lineHeight: 1.6,
+  }
 }
 
 function VisibilityBadge({ visibility }) {
@@ -55,19 +77,229 @@ function VisibilityBadge({ visibility }) {
   const meta = VIS_META[visibility] || VIS_META.gm
   const { Icon } = meta
   return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 4,
-        fontSize: 11,
-        color: meta.color,
-        border: `1px solid var(--border)`,
-        borderRadius: 12,
-        padding: '1px 8px',
-      }}
-    >
+    <span style={badgeStyle(meta, false)}>
       <Icon size={11} /> {t(`wiki.vis_${meta.key}`)}
+    </span>
+  )
+}
+
+const POPOVER_WIDTH = 220
+
+// Editable visibility badge: a pill that opens a popover for changing the page's
+// visibility level. For "members" (Private), the popover lists campaign members
+// with per-member access toggles so the owner can grant/revoke without opening
+// the full editor. The popover is portalled at fixed coordinates so it isn't
+// clipped by surrounding overflow.
+function VisibilityEditor({ campaign, isOwner, page, onSetVisibility, onSetShares }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const [coords, setCoords] = useState({ top: 0, left: 0 })
+  const triggerRef = useRef(null)
+  const popoverRef = useRef(null)
+
+  const meta = VIS_META[page.visibility] || VIS_META.gm
+  const { Icon } = meta
+  // Match PageEditor's option gating: only the campaign owner may use the GM-only
+  // and Private (specific members) levels; everyone else is limited to Public.
+  const options = isOwner ? ['gm', 'group', 'members'] : ['group']
+  const members = (campaign.members || []).filter((m) => !m.is_owner)
+  const sharedIds = page.shared_user_ids || []
+
+  const place = useCallback(() => {
+    const el = triggerRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const margin = 8
+    let left = r.left
+    if (left + POPOVER_WIDTH > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - margin - POPOVER_WIDTH)
+    }
+    setCoords({ top: r.bottom + 4, left })
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    place()
+    const onDoc = (e) => {
+      if (triggerRef.current?.contains(e.target) || popoverRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    const onReposition = () => place()
+    document.addEventListener('mousedown', onDoc)
+    window.addEventListener('resize', onReposition)
+    window.addEventListener('scroll', onReposition, true)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      window.removeEventListener('resize', onReposition)
+      window.removeEventListener('scroll', onReposition, true)
+    }
+  }, [open, place])
+
+  const toggleMember = (userId) => {
+    const next = sharedIds.includes(userId)
+      ? sharedIds.filter((id) => id !== userId)
+      : [...sharedIds, userId]
+    onSetShares(next)
+  }
+
+  return (
+    <span style={{ display: 'inline-flex' }}>
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t('wiki.changeVisibility')}
+        title={t('wiki.changeVisibility')}
+        style={badgeStyle(meta, true)}
+      >
+        <Icon size={11} /> {t(`wiki.vis_${meta.key}`)}
+        <LuChevronDown size={11} aria-hidden="true" />
+      </button>
+
+      {open &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            role="menu"
+            style={{
+              position: 'fixed',
+              top: coords.top,
+              left: coords.left,
+              zIndex: 2000,
+              width: POPOVER_WIDTH,
+              background: 'var(--bg-panel)',
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              padding: 6,
+              boxShadow: '0 6px 20px rgba(0,0,0,0.35)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+            }}
+          >
+            {options.map((v) => {
+              const m = VIS_META[v]
+              const OptIcon = m.Icon
+              const selected = page.visibility === v
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={selected}
+                  onClick={() => {
+                    if (!selected) onSetVisibility(v)
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '6px 8px',
+                    background: selected ? 'var(--bg-card)' : 'transparent',
+                    border: '1px solid transparent',
+                    borderRadius: 6,
+                    color: selected ? 'var(--text)' : 'var(--text-dim)',
+                    cursor: 'pointer',
+                    font: 'inherit',
+                    fontSize: 13,
+                    textAlign: 'left',
+                  }}
+                >
+                  <OptIcon size={13} style={{ color: m.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1 }}>{t(`wiki.vis_${m.key}`)}</span>
+                  {selected && <LuCheck size={13} style={{ color: 'var(--gold)' }} />}
+                </button>
+              )
+            })}
+
+            {isOwner && page.visibility === 'members' && (
+              <div
+                style={{
+                  borderTop: '1px solid var(--border)',
+                  marginTop: 4,
+                  paddingTop: 6,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 10,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    color: 'var(--text-muted)',
+                    fontWeight: 600,
+                    padding: '0 4px 4px',
+                  }}
+                >
+                  {t('wiki.shareWith')}
+                </div>
+                {members.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '2px 4px' }}>
+                    {t('wiki.noMembers')}
+                  </div>
+                ) : (
+                  members.map((mb) => {
+                    const checked = sharedIds.includes(mb.user_id)
+                    const name = mb.character_name || mb.display_name || mb.username
+                    return (
+                      <button
+                        key={mb.user_id}
+                        type="button"
+                        role="menuitemcheckbox"
+                        aria-checked={checked}
+                        onClick={() => toggleMember(mb.user_id)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          width: '100%',
+                          padding: '5px 8px',
+                          background: 'transparent',
+                          border: '1px solid transparent',
+                          borderRadius: 6,
+                          color: checked ? 'var(--text)' : 'var(--text-dim)',
+                          cursor: 'pointer',
+                          font: 'inherit',
+                          fontSize: 13,
+                          textAlign: 'left',
+                        }}
+                      >
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            flexShrink: 0,
+                            width: 15,
+                            height: 15,
+                            borderRadius: 4,
+                            border: `1px solid ${checked ? 'var(--gold)' : 'var(--border)'}`,
+                            background: checked ? 'var(--gold)' : 'transparent',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {checked && <LuCheck size={11} color="#1a1209" />}
+                        </span>
+                        <span
+                          style={{
+                            flex: 1,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {name}
+                        </span>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            )}
+          </div>,
+          document.body
+        )}
     </span>
   )
 }
@@ -112,6 +344,28 @@ function PageEditor({ campaign, isOwner, page, allPages, defaultParentId, onSave
       })
     },
     [body.length]
+  )
+
+  // Wrap the current selection in before/after markers (or insert the empty pair
+  // and drop the cursor between them when nothing is selected).
+  const wrapSelection = useCallback(
+    (before, after) => {
+      const ta = bodyRef.current
+      if (!ta) {
+        setBody((b) => b + before + after)
+        return
+      }
+      const start = ta.selectionStart ?? body.length
+      const end = ta.selectionEnd ?? body.length
+      const selected = body.slice(start, end)
+      setBody((b) => b.slice(0, start) + before + selected + after + b.slice(end))
+      requestAnimationFrame(() => {
+        ta.focus()
+        const pos = start + before.length + selected.length
+        ta.setSelectionRange(pos, pos)
+      })
+    },
+    [body]
   )
 
   const save = async () => {
@@ -204,6 +458,16 @@ function PageEditor({ campaign, isOwner, page, allPages, defaultParentId, onSave
         <button type="button" onClick={() => setShowEmbedPicker(true)} style={toolbarBtn}>
           <LuBookOpen size={13} /> {t('wiki.insertEmbed')}
         </button>
+        {isOwner && (
+          <button
+            type="button"
+            onClick={() => wrapSelection('||', '||')}
+            title={t('wiki.insertSecretHint')}
+            style={toolbarBtn}
+          >
+            <LuEyeOff size={13} /> {t('wiki.insertSecret')}
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setShowPreview((v) => !v)}
@@ -417,6 +681,28 @@ export default function WikiView({ campaign, isOwner }) {
     if (page?.id === pageId) setPage((p) => (p ? { ...p, icon: icon || '' } : p))
   }
 
+  // Change the open page's visibility from its badge. Switching away from
+  // "members" clears the share list to mirror PageEditor's save behaviour.
+  const changeVisibility = async (visibility) => {
+    if (!page) return
+    const payload = { visibility }
+    if (visibility !== 'members') payload.shared_user_ids = []
+    await campaigns.updateWikiPage(campaign.id, page.id, payload)
+    setPage((p) =>
+      p
+        ? { ...p, visibility, shared_user_ids: visibility === 'members' ? p.shared_user_ids : [] }
+        : p
+    )
+    loadList(selectedId)
+  }
+
+  // Toggle which members can access the open Private page.
+  const changeShares = async (sharedIds) => {
+    if (!page) return
+    await campaigns.updateWikiPage(campaign.id, page.id, { shared_user_ids: sharedIds })
+    setPage((p) => (p ? { ...p, shared_user_ids: sharedIds } : p))
+  }
+
   const startCreate = (parentId = '') => {
     setCreateParentId(parentId)
     setCreating(true)
@@ -552,9 +838,10 @@ export default function WikiView({ campaign, isOwner }) {
               <IconPicker
                 value={p.icon}
                 onChange={(icon) => changeIcon(p.id, icon)}
-                fallback={<Icon size={14} style={{ color: meta.color }} aria-hidden="true" />}
+                fallback={<Icon size={14} aria-hidden="true" />}
                 ariaLabel={t('wiki.iconLabel')}
                 compact
+                color={meta.color}
               />
             </div>
           ) : (
@@ -736,20 +1023,41 @@ export default function WikiView({ campaign, isOwner }) {
             >
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 6px' }}>
-                  {page.can_edit ? (
-                    <IconPicker
-                      value={page.icon}
-                      onChange={(icon) => changeIcon(page.id, icon)}
-                      fallback={<LuFileText size={18} aria-hidden="true" />}
-                      ariaLabel={t('wiki.iconLabel')}
-                    />
-                  ) : (
-                    page.icon && <CampaignIcon name={page.icon} size={20} />
-                  )}
+                  {(() => {
+                    const visColor = (VIS_META[page.visibility] || VIS_META.gm).color
+                    return page.can_edit ? (
+                      <IconPicker
+                        value={page.icon}
+                        onChange={(icon) => changeIcon(page.id, icon)}
+                        fallback={<LuFileText size={20} aria-hidden="true" />}
+                        ariaLabel={t('wiki.iconLabel')}
+                        compact
+                        size={20}
+                        color={visColor}
+                      />
+                    ) : (
+                      <CampaignIcon
+                        name={page.icon}
+                        fallback={LuFileText}
+                        size={20}
+                        style={{ color: visColor }}
+                      />
+                    )
+                  })()}
                   <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{page.title}</h2>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <VisibilityBadge visibility={page.visibility} />
+                  {page.can_edit ? (
+                    <VisibilityEditor
+                      campaign={campaign}
+                      isOwner={isOwner}
+                      page={page}
+                      onSetVisibility={changeVisibility}
+                      onSetShares={changeShares}
+                    />
+                  ) : (
+                    <VisibilityBadge visibility={page.visibility} />
+                  )}
                   {page.created_by_name && (
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {t('wiki.byAuthor', { name: page.created_by_name })}

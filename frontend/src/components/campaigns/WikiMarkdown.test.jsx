@@ -57,6 +57,29 @@ describe('WikiMarkdown', () => {
     expect(link).toBeTruthy()
   })
 
+  it('renders a ||GM secret|| as a tinted span keeping the inner text', () => {
+    // The owner receives bodies that still contain ||...|| (the backend strips
+    // them for everyone else); the markers are dropped and the text styled.
+    renderMd({ body: 'The duke is ||a doppelganger|| in disguise.' })
+    const secret = screen.getByText('a doppelganger')
+    expect(secret.tagName).toBe('SPAN')
+    expect(secret.getAttribute('title')).toBe('GM only — hidden from players')
+    // The pipe markers themselves are not rendered.
+    expect(screen.queryByText(/\|\|/)).toBeNull()
+  })
+
+  it('keeps a [[wiki link]] working when it sits next to a secret', () => {
+    const onOpenSlug = vi.fn()
+    renderMd({
+      body: '||hidden|| then [[The Castle]].',
+      pageSlugs: ['the-castle'],
+      onOpenSlug,
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'The Castle' }))
+    expect(onOpenSlug).toHaveBeenCalledWith('the-castle')
+    expect(screen.getByText('hidden').tagName).toBe('SPAN')
+  })
+
   it('renders a Grimoire embed as a content button, not a wiki link', () => {
     renderMd({ body: 'See [[book:abc123:5]] here.' })
     // Embed renders a labeled button; no stub wiki link created.

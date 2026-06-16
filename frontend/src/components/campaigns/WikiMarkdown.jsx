@@ -15,6 +15,11 @@ import { LuBookOpen, LuMap, LuUser, LuFileQuestion } from 'react-icons/lu'
 const LINK_RE = /\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]/g
 const EMBED_PREFIXES = ['book:', 'map:', 'token:']
 
+// ||GM-only text||. Only the owner ever receives a body still containing these
+// (the backend strips them for everyone else), so rendering them as a tinted
+// "GM only" span just helps the owner see what players won't.
+const SECRET_RE = /\|\|([\s\S]*?)\|\|/g
+
 function slugify(title) {
   return (
     title
@@ -33,7 +38,13 @@ function escapeLinkText(text) {
 }
 
 function preprocess(body) {
-  return (body || '').replace(LINK_RE, (_match, target, label) => {
+  // Wrap GM-only ||secrets|| first so their pipes aren't mistaken for the
+  // [[Title|label]] separator below. The inner text becomes the link text of a
+  // private grimoire-secret: scheme, rendered as a tinted span in the `a` handler.
+  const withSecrets = (body || '').replace(SECRET_RE, (_match, inner) => {
+    return `[${escapeLinkText(inner)}](grimoire-secret:)`
+  })
+  return withSecrets.replace(LINK_RE, (_match, target, label) => {
     const t = target.trim()
     const lower = t.toLowerCase()
     if (EMBED_PREFIXES.some((p) => lower.startsWith(p))) {
@@ -90,6 +101,22 @@ export default function WikiMarkdown({ body, pageSlugs = [], onOpenSlug }) {
   const components = useMemo(
     () => ({
       a({ href, children, ...props }) {
+        if (href?.startsWith('grimoire-secret:')) {
+          return (
+            <span
+              title={t('wiki.secretHint')}
+              style={{
+                background: 'var(--gold-dim, rgba(212, 175, 55, 0.15))',
+                borderRadius: 4,
+                padding: '0 4px',
+                boxDecorationBreak: 'clone',
+                WebkitBoxDecorationBreak: 'clone',
+              }}
+            >
+              {children}
+            </span>
+          )
+        }
         if (href?.startsWith('grimoire-wiki:')) {
           const slug = href.slice('grimoire-wiki:'.length)
           const exists = slugSet.has(slug)

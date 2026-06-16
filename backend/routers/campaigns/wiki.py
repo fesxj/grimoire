@@ -15,7 +15,13 @@ from fastapi import Depends, HTTPException, Query
 from ...auth import CurrentUser, get_current_user
 from ...config import SessionLocal
 from ...models import User, WikiPage, WikiPageLink, WikiPageShare
-from ._helpers import assert_can_manage, can_view, extract_snippet, get_campaign_or_404
+from ._helpers import (
+    assert_can_manage,
+    can_view,
+    extract_snippet,
+    get_campaign_or_404,
+    strip_gm_secrets,
+)
 from ._schemas import WikiPageCreate, WikiPageUpdate, WikiReorder
 
 # Reserved prefixes for Grimoire content embeds — not page-title links.
@@ -246,7 +252,10 @@ def get_page(
             "campaign_id": campaign_id,
             "title": page.title,
             "slug": page.slug,
-            "body": page.body,
+            # ||...|| spans are GM-only: strip them for everyone but the owner.
+            # (Personal campaigns only ever have the owner as a viewer, so their
+            # bodies are never stripped.)
+            "body": page.body if is_owner else strip_gm_secrets(page.body),
             "visibility": page.visibility,
             "page_type": page.page_type,
             "session_date": page.session_date,
@@ -424,12 +433,18 @@ def search_pages(
             )
             .all()
         )
+        is_owner = c.owner_id == current_user.id
         results = []
         for p in pages:
             if not can_view_page(p, c, current_user, db):
                 continue
+            # Hide ||...|| GM-only spans from non-owners: search and snippet over
+            # the stripped body so a secret can't leak via a body-only match.
+            body = p.body or "" if is_owner else strip_gm_secrets(p.body or "")
+            if not is_owner and q.lower() not in (p.title or "").lower() and q.lower() not in body.lower():
+                continue
             d = _page_summary(p)
-            d["snippet"] = extract_snippet(p.body or "", q) if p.body else ""
+            d["snippet"] = extract_snippet(body, q) if body else ""
             results.append(d)
         results.sort(key=lambda r: (r["title"] or "").lower())
         return {"results": results, "query": q}

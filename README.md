@@ -559,7 +559,8 @@ When OIDC is configured, this flag can be driven by the provider's [permissions 
 Each campaign has a full-page markdown **wiki** (opened from the campaign overview) for building out the world — a place for session recaps, lore, NPCs, and plans:
 
 - **Markdown** with tables, images, and the usual formatting, edited side-by-side with a live preview.
-- **Visibility per page** — *GM only*, *all members*, or *specific members* (e.g. a secret shared with one player).
+- **Visibility per page** — *GM only*, *Public* (all members), or *Private* (specific members — e.g. a secret shared with one player). Change it straight from the visibility badge on the page: the badge is a dropdown, and for *Private* pages it lists members so you can grant or revoke access without opening the editor.
+- **GM secrets inline** — wrap text in `||double pipes||` (or use the **GM secret** button) to hide just that span inside an otherwise shared page. The GM sees it highlighted; players never receive it — it's stripped on the server before the page is sent. (Personal campaigns keep everything, since only you can read them.)
 - **Nested pages** — organize the sidebar as a tree: any page can hold subpages, to any depth (a "category" is just a page with children). Drag pages to re-nest them, add a subpage from the parent row, and collapse/expand branches. Deleting a page lifts its subpages up to the parent rather than removing them.
 - **Page links** — write `[[Page Title]]` to link pages; missing targets are auto-created as stubs, and each page shows what links back to it.
 - **Grimoire embeds** — drop a book (optionally at a page), map, or token straight into a page.

@@ -166,6 +166,64 @@ class TestWikiVisibility:
         assert resp.status_code == 403
 
 
+class TestWikiGmSecrets:
+    BODY = "Public intro. ||The duke is a doppelganger|| The rest is shared."
+    STRIPPED = "Public intro.  The rest is shared."
+
+    def test_owner_sees_secret_spans(self, client, gm_headers, player_headers, campaign_with_member):
+        cid = campaign_with_member
+        page = _create(client, gm_headers, cid, title="Lore", body=self.BODY, visibility="group").json()
+        got = client.get(f"/api/campaigns/{cid}/wiki/{page['id']}", headers=gm_headers).json()
+        assert got["body"] == self.BODY
+
+    def test_player_gets_secret_stripped(self, client, gm_headers, player_headers, campaign_with_member):
+        cid = campaign_with_member
+        page = _create(client, gm_headers, cid, title="Lore", body=self.BODY, visibility="group").json()
+        got = client.get(f"/api/campaigns/{cid}/wiki/{page['id']}", headers=player_headers).json()
+        assert got["body"] == self.STRIPPED
+        assert "doppelganger" not in got["body"]
+
+    def test_multiline_secret_stripped(self, client, gm_headers, player_headers, campaign_with_member):
+        cid = campaign_with_member
+        body = "Before.\n||line one\nline two||\nAfter."
+        page = _create(client, gm_headers, cid, title="Multi", body=body, visibility="group").json()
+        got = client.get(f"/api/campaigns/{cid}/wiki/{page['id']}", headers=player_headers).json()
+        assert "line one" not in got["body"]
+        assert "line two" not in got["body"]
+        assert got["body"] == "Before.\n\nAfter."
+
+    def test_personal_campaign_keeps_secrets(self, client, player_headers):
+        # A player's personal (non-GM) campaign — only the owner ever views it, so
+        # nothing is stripped.
+        c = client.post(
+            "/api/campaigns", json={"name": f"Personal {uid()}"}, headers=player_headers
+        ).json()
+        page = _create(client, player_headers, c["id"], title="Mine", body=self.BODY).json()
+        got = client.get(f"/api/campaigns/{c['id']}/wiki/{page['id']}", headers=player_headers).json()
+        assert got["body"] == self.BODY
+
+    def test_search_snippet_hides_secret_from_player(
+        self, client, gm_headers, player_headers, campaign_with_member
+    ):
+        cid = campaign_with_member
+        _create(
+            client,
+            gm_headers,
+            cid,
+            title="Findable",
+            body="visible text ||hidden treasure|| more",
+            visibility="group",
+        )
+        # The player searching the secret's words gets no match.
+        resp = client.get(f"/api/campaigns/{cid}/wiki/search?q=treasure", headers=player_headers)
+        assert resp.status_code == 200
+        assert resp.json()["results"] == []
+        # ...but a visible word still matches, with the secret stripped from the snippet.
+        resp2 = client.get(f"/api/campaigns/{cid}/wiki/search?q=visible", headers=player_headers)
+        hit = next(r for r in resp2.json()["results"] if r["title"] == "Findable")
+        assert "treasure" not in hit["snippet"]
+
+
 class TestWikiLinks:
     def test_link_autocreates_stub_and_backlink(self, client, gm_headers, gm_campaign):
         cid = gm_campaign["id"]

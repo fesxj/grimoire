@@ -1,12 +1,28 @@
 """Shared helpers and schedule computation for the campaigns package."""
 
 import datetime
+import re
 from typing import Optional, List
 
 from fastapi import HTTPException
 
 from ...models import Campaign, CampaignMember, User
 from ...auth import CurrentUser
+
+
+# A GM-only secret span in a wiki body: ||text the players must never see||.
+# Non-greedy so adjacent spans on one line don't merge; DOTALL so a secret may
+# wrap multiple lines.
+_GM_SECRET_RE = re.compile(r"\|\|.*?\|\|", re.DOTALL)
+
+
+def strip_gm_secrets(body: str) -> str:
+    """Remove every ||...|| GM-only span (markers and enclosed text) from a body.
+
+    Used before sending a wiki page to a non-owner so the GM's hidden notes never
+    leave the server. An unterminated trailing `||` (no closing pair) is left as-is.
+    """
+    return _GM_SECRET_RE.sub("", body or "")
 
 
 def is_gm_or_admin(user: CurrentUser) -> bool:

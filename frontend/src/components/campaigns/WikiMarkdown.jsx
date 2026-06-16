@@ -26,8 +26,10 @@ function slugify(title) {
 }
 
 function escapeLinkText(text) {
-  // Keep link text from breaking the markdown link syntax.
-  return text.replace(/\]/g, '\\]')
+  // Keep link text from breaking the markdown link syntax. Escape backslashes
+  // first so a user-supplied trailing "\" can't combine with the "]" we add and
+  // escape our own closing bracket.
+  return text.replace(/\\/g, '\\\\').replace(/\]/g, '\\]')
 }
 
 function preprocess(body) {

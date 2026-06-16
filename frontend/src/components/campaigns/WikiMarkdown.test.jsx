@@ -40,6 +40,16 @@ describe('WikiMarkdown', () => {
     expect(onOpenSlug).toHaveBeenCalledWith('the-castle')
   })
 
+  it('escapes backslashes in link text so they cannot break out of the link', () => {
+    const onOpenSlug = vi.fn()
+    // A trailing backslash in the label must not escape the closing bracket of
+    // the markdown link we generate; the link stays intact and clickable.
+    renderMd({ body: '[[The Castle|the keep\\]]', pageSlugs: ['the-castle'], onOpenSlug })
+    const link = screen.getByRole('button', { name: /the keep/ })
+    fireEvent.click(link)
+    expect(onOpenSlug).toHaveBeenCalledWith('the-castle')
+  })
+
   it('renders a missing wiki link distinctly but still clickable', () => {
     const onOpenSlug = vi.fn()
     renderMd({ body: '[[Nowhere]]', pageSlugs: [], onOpenSlug })

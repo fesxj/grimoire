@@ -970,16 +970,14 @@ export default function SystemDetailView() {
       )}
 
       {bulkMode && (
-        <div style={{ position: 'sticky', bottom: 0, margin: '0 -40px', zIndex: 200 }}>
-          <BulkActionBar
-            count={totalSelected}
-            applying={bulkApplying}
-            onApplyTags={applyBulkTags}
-            onAddToCampaign={() => setShowAddToCampaign(true)}
-            onBulkEdit={() => setShowBulkEdit(true)}
-            onDone={bulk.exit}
-          />
-        </div>
+        <BulkActionBar
+          count={totalSelected}
+          applying={bulkApplying}
+          onApplyTags={applyBulkTags}
+          onAddToCampaign={() => setShowAddToCampaign(true)}
+          onBulkEdit={() => setShowBulkEdit(true)}
+          onDone={bulk.exit}
+        />
       )}
 
       {showAddToCampaign && (

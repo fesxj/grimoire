@@ -10,7 +10,7 @@
   [![License](https://img.shields.io/github/license/hunter-read/grimoire)](LICENSE)
   [![Docker](https://img.shields.io/docker/pulls/hunterreadca/grimoire?logo=docker&logoColor=white)](https://hub.docker.com/r/hunterreadca/grimoire)
 
-  **[📖 Documentation](https://grimoirecodex.org)**
+  **[Website](https://grimoirecodex.org)**  ·  **[Documentation](https://docs.grimoirecodex.org)**  ·  **[Live Demo](https://demo.grimoirecodex.org)**  ·  **[Join our Discord](https://discord.gg/9Sd4CGZC63)**
 </div>
 
 

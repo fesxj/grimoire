@@ -50,4 +50,33 @@ describe('useBulkSelection', () => {
     expect(result.current.bulkMode).toBe(false)
     expect(result.current.count).toBe(0)
   })
+
+  const pressEscape = () =>
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+
+  it('Escape exits bulk mode and clears selection', () => {
+    const { result } = renderHook(() => useBulkSelection())
+    act(() => result.current.enter())
+    act(() => result.current.toggleItem('a', { orderedIds: ordered }))
+    pressEscape()
+    expect(result.current.bulkMode).toBe(false)
+    expect(result.current.count).toBe(0)
+  })
+
+  it('Escape is ignored when bulk mode is off', () => {
+    const { result } = renderHook(() => useBulkSelection())
+    pressEscape()
+    expect(result.current.bulkMode).toBe(false)
+  })
+
+  it('Escape does not exit while a dialog is open', () => {
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    document.body.appendChild(dialog)
+    const { result } = renderHook(() => useBulkSelection())
+    act(() => result.current.enter())
+    pressEscape()
+    expect(result.current.bulkMode).toBe(true)
+    document.body.removeChild(dialog)
+  })
 })

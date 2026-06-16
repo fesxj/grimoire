@@ -857,13 +857,27 @@ class TestRemovedAdminEndpoints:
     POST routes have no catch-all and return a hard 404/405.
     """
 
+    @staticmethod
+    def _assert_not_old_admin_list(resp):
+        # The route is gone: the GET falls through to the SPA catch-all, which
+        # serves index.html when the frontend is built or a "frontend not found"
+        # JSON error (500) when it isn't (e.g. CI's backend-only job). Either way
+        # it must not be the old 200 JSON campaign list.
+        if resp.status_code != 200:
+            return
+        try:
+            body = resp.json()
+        except ValueError:
+            return  # HTML SPA response, not JSON — the route is gone.
+        assert not isinstance(body, list)
+
     def test_admin_list_all_no_longer_json(self, client, admin_headers):
         resp = client.get("/api/campaigns/admin/all", headers=admin_headers)
-        assert "application/json" not in resp.headers.get("content-type", "")
+        self._assert_not_old_admin_list(resp)
 
     def test_admin_list_deleted_no_longer_json(self, client, admin_headers):
         resp = client.get("/api/campaigns/admin/deleted", headers=admin_headers)
-        assert "application/json" not in resp.headers.get("content-type", "")
+        self._assert_not_old_admin_list(resp)
 
     def test_admin_soft_delete_gone(self, client, admin_headers, gm_campaign):
         resp = client.post(

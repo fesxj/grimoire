@@ -81,7 +81,7 @@
     "sizeGB": "{{size}} GB",
     "addToFavorites": "Zu Favoriten hinzufügen",
     "removeFromFavorites": "Aus Favoriten entfernen",
-    "select": "Auswählen"
+    "select": "Mehrere auswählen"
   },
   "login": {
     "username": "Benutzername",

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 
 /**
  * Shared bulk-selection state for the library views (maps, tokens, books).
@@ -25,6 +25,23 @@ export default function useBulkSelection() {
     setSelectedFolderPaths(new Set())
     lastClickedId.current = null
   }, [])
+
+  // Escape leaves bulk mode, but only when nothing more local should claim the
+  // key first: an open dialog (bulk edit / add-to-campaign modals) or a focused
+  // text field the user might be trying to clear/blur.
+  useEffect(() => {
+    if (!bulkMode) return
+    const onKeyDown = (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (document.querySelector('[role="dialog"]')) return
+      const el = document.activeElement
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || el?.isContentEditable) return
+      exit()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [bulkMode, exit])
 
   const clear = useCallback(() => {
     setSelectedIds(new Set())

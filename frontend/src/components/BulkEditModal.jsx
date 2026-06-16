@@ -8,16 +8,27 @@ import api from '../api'
 const CONFIG = {
   map: {
     endpoint: (id) => `/maps/${id}`,
-    fields: ['description', 'tags', 'map_type', 'grid_size'],
+    fields: ['tags', 'grid_size'],
   },
   token: {
     endpoint: (id) => `/tokens/${id}`,
-    fields: ['description', 'tags', 'is_explicit'],
+    fields: ['tags', 'is_explicit'],
   },
   book: {
     endpoint: (id) => `/books/${id}`,
     fields: ['title', 'category', 'description', 'publisher', 'year', 'tags', 'is_explicit'],
   },
+}
+
+// Pull a grid size like "22x22" out of a map's filename or folder, e.g.
+// "Sunken Temple (22x22)" → "22x22". Used to pre-fill an empty grid size.
+const GRID_RE = /(\d+\s*[x×]\s*\d+)/i
+const inferGridSize = (item) => {
+  for (const src of [item.filename, item.folder_path, item.relative_path]) {
+    const m = typeof src === 'string' && src.match(GRID_RE)
+    if (m) return m[1].replace(/\s*[x×]\s*/i, 'x')
+  }
+  return ''
 }
 
 const tagsToString = (tags) => (Array.isArray(tags) ? tags.join(', ') : '')
@@ -45,7 +56,11 @@ export default function BulkEditModal({ type, items, onClose, onSaved }) {
     const out = {}
     for (const it of items) {
       const d = {}
-      for (const f of cfg.fields) d[f] = f === 'tags' ? tagsToString(it.tags) : (it[f] ?? '')
+      for (const f of cfg.fields) {
+        if (f === 'tags') d[f] = tagsToString(it.tags)
+        else if (f === 'grid_size') d[f] = it.grid_size || inferGridSize(it)
+        else d[f] = it[f] ?? ''
+      }
       out[it.id] = d
     }
     return out
@@ -61,7 +76,6 @@ export default function BulkEditModal({ type, items, onClose, onSaved }) {
       publisher: t('bulkEdit.field_publisher'),
       year: t('bulkEdit.field_year'),
       tags: t('bulkEdit.field_tags'),
-      map_type: t('bulkEdit.field_mapType'),
       grid_size: t('bulkEdit.field_gridSize'),
       is_explicit: t('bulkEdit.field_explicit'),
     }),

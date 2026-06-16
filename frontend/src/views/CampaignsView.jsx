@@ -173,14 +173,15 @@ function CampaignCard({ campaign, onClick, onOpenNotes, userId, badgeLabel, subt
           </div>
         )}
 
-        {/* Info (type/system/schedule) on the left, Notes button on the right. */}
+        {/* Info (type/system/schedule) on the left, Notes button on the right.
+            The row never wraps: the info block flexes/wraps internally so the
+            button stays pinned right rather than dropping to the next line. */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 12,
-            flexWrap: 'wrap',
           }}
         >
           <div
@@ -190,6 +191,7 @@ function CampaignCard({ campaign, onClick, onOpenNotes, userId, badgeLabel, subt
               fontSize: 12,
               color: 'var(--text-muted)',
               flexWrap: 'wrap',
+              flex: 1,
               minWidth: 0,
             }}
           >

@@ -163,9 +163,7 @@ describe('MaintenanceTab — ScheduledRescanSection', () => {
       cleanup_on_rescan: false,
     })
     render(<MaintenanceTab />)
-    await waitFor(() =>
-      expect(screen.getByText(/also run database cleanup/i)).toBeInTheDocument()
-    )
+    await waitFor(() => expect(screen.getByText(/also run database cleanup/i)).toBeInTheDocument())
   })
 
   it('loads cleanup_on_rescan=true from settings as checked', async () => {
@@ -207,7 +205,7 @@ describe('MaintenanceTab — ScheduledRescanSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /save schedule/i }))
     await waitFor(() => {
       expect(settingsApi.patch).toHaveBeenCalledWith(
-        expect.objectContaining({ cleanup_on_rescan: true }),
+        expect.objectContaining({ cleanup_on_rescan: true })
       )
     })
   })
@@ -235,7 +233,7 @@ describe('MaintenanceTab — ScheduledRescanSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /save schedule/i }))
     await waitFor(() => {
       expect(settingsApi.patch).toHaveBeenCalledWith(
-        expect.objectContaining({ cleanup_on_rescan: false }),
+        expect.objectContaining({ cleanup_on_rescan: false })
       )
     })
   })

@@ -6,6 +6,11 @@ vi.mock('../../api', () => ({
   campaigns: {
     eligibleMembers: vi.fn(),
     invite: vi.fn(),
+    memberSheetUrl: vi.fn(() => '/api/sheet'),
+    getMemberSheetFields: vi.fn(),
+    saveMemberSheetFields: vi.fn(),
+    listSheetSources: vi.fn(),
+    duplicateMemberSheet: vi.fn(),
   },
 }))
 
@@ -122,6 +127,20 @@ describe('MemberRow', () => {
   it('does not flag a member with campaign access enabled', () => {
     renderRow({ campaign_access: true })
     expect(screen.queryByText('Access disabled')).toBeNull()
+  })
+
+  it('warns before replacing an existing sheet, offering Cancel/Download/Replace', () => {
+    renderRow(
+      { id: 'mem1', has_sheet: true, character_sheet_filename: 'hero.pdf' },
+      { currentUserId: 'u1', campaignId: 'c1' }
+    )
+    // The replace (upload) action is shown for the editable member with a sheet.
+    fireEvent.click(screen.getByLabelText('Replace sheet'))
+    // The warning dialog appears with all three choices.
+    expect(screen.getByText(/replaces the current one/i)).toBeTruthy()
+    expect(screen.getByText('Download current')).toBeTruthy()
+    expect(screen.getByText('Replace')).toBeTruthy()
+    expect(screen.getByText('Cancel')).toBeTruthy()
   })
 })
 

@@ -746,8 +746,11 @@ function ExportTagsSection() {
           background: 'var(--bg-card)',
           border: '1px solid var(--border)',
           color: exporting ? 'var(--gold)' : 'var(--text-dim)',
-          cursor: exporting || (!includeLibrary && !includeMaps && !includeTokens) ? 'default' : 'pointer',
-          opacity: (!includeLibrary && !includeMaps && !includeTokens) ? 0.5 : 1,
+          cursor:
+            exporting || (!includeLibrary && !includeMaps && !includeTokens)
+              ? 'default'
+              : 'pointer',
+          opacity: !includeLibrary && !includeMaps && !includeTokens ? 0.5 : 1,
         }}
       >
         {exporting ? <Spinner size={13} /> : <LuDownload size={13} />}

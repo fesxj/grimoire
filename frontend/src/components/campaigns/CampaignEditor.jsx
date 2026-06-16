@@ -15,6 +15,7 @@ import api, { campaigns } from '../../api'
 import ScheduleEditor from './ScheduleEditor'
 import Spinner from '../Spinner'
 import { utcTimeToLocal, USER_TZ } from './_scheduleShared'
+import { useFavorites } from '../../context/FavoritesContext'
 
 const TYPE_ICON = { book: LuBookOpen, map: LuMap, token: LuUser }
 
@@ -22,13 +23,30 @@ function resourceKey(r) {
   return `${r.resource_type}:${r.resource_id}`
 }
 
+const RESOURCE_TYPES = ['', 'book', 'map', 'token']
+
 function ResourcePickerStep({ systemId, selected, setSelected }) {
   const { t } = useTranslation()
+  const { isFavorite } = useFavorites()
   const [suggested, setSuggested] = useState([])
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
+  const [typeFilter, setTypeFilter] = useState('')
+  // Default the system filter to the campaign's system when it's a real id.
+  const [systemFilter, setSystemFilter] = useState(systemId || '')
+  const [systems, setSystems] = useState([])
   const debounceRef = useRef(null)
+
+  useEffect(() => {
+    api
+      .get('/systems')
+      .then((data) => setSystems(data || []))
+      .catch(() => {})
+  }, [])
+
+  // The system filter only applies to book searches.
+  const systemFilterActive = typeFilter === '' || typeFilter === 'book'
 
   // Load suggested resources for the chosen system and pre-select core books (shared).
   useEffect(() => {
@@ -63,15 +81,16 @@ function ResourcePickerStep({ systemId, selected, setSelected }) {
     }
     clearTimeout(debounceRef.current)
     setSearching(true)
+    const sys = systemFilterActive ? systemFilter : ''
     debounceRef.current = setTimeout(() => {
       campaigns
-        .searchResources(query.trim())
+        .searchResources(query.trim(), typeFilter, sys)
         .then((data) => setResults(data || []))
         .catch(() => setResults([]))
         .finally(() => setSearching(false))
     }, 250)
     return () => clearTimeout(debounceRef.current)
-  }, [query])
+  }, [query, typeFilter, systemFilter, systemFilterActive])
 
   const selectedKeys = new Set(selected.map(resourceKey))
 
@@ -158,6 +177,48 @@ function ResourcePickerStep({ systemId, selected, setSelected }) {
 
       {/* Search to add more */}
       <div style={{ marginBottom: 14 }}>
+        {/* Resource-type segmented control */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+          {RESOURCE_TYPES.map((type) => (
+            <button
+              key={type || 'all'}
+              type="button"
+              onClick={() => setTypeFilter(type)}
+              style={typeTab(typeFilter === type)}
+            >
+              {t(`campaignEditor.resources.type_${type || 'all'}`)}
+            </button>
+          ))}
+        </div>
+
+        {/* System filter (books only) */}
+        {systemFilterActive && (
+          <select
+            value={systemFilter}
+            onChange={(e) => setSystemFilter(e.target.value)}
+            aria-label={t('campaignEditor.resources.systemFilterLabel')}
+            style={{ ...inputStyle, appearance: 'auto', marginBottom: 8 }}
+          >
+            <option value="">{t('campaignEditor.resources.systemFilterAll')}</option>
+            {systems
+              .slice()
+              .sort((a, b) => {
+                // Campaign's system first, then favorites, then name.
+                if (a.id === systemId) return -1
+                if (b.id === systemId) return 1
+                const fa = isFavorite('system', a.id)
+                const fb = isFavorite('system', b.id)
+                if (fa !== fb) return fa ? -1 : 1
+                return a.name.localeCompare(b.name)
+              })
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.id === systemId ? `★ ${s.name}` : s.name}
+                </option>
+              ))}
+          </select>
+        )}
+
         <div style={{ position: 'relative' }}>
           <LuSearch
             size={14}
@@ -195,16 +256,31 @@ function ResourcePickerStep({ systemId, selected, setSelected }) {
                     style={resultRow(already)}
                   >
                     <Icon size={14} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
-                    <span
-                      style={{
-                        flex: 1,
-                        textAlign: 'left',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {r.name}
+                    <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                      <span
+                        style={{
+                          display: 'block',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {r.name}
+                      </span>
+                      {r.subtitle && (
+                        <span
+                          style={{
+                            display: 'block',
+                            fontSize: 11,
+                            color: 'var(--text-muted)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {r.subtitle}
+                        </span>
+                      )}
                     </span>
                     {!already && <LuPlus size={14} style={{ color: 'var(--gold)' }} />}
                   </button>
@@ -448,6 +524,7 @@ export default function CampaignEditor({
   onScheduleChanged,
 }) {
   const { t } = useTranslation()
+  const { isFavorite } = useFavorites()
   const isEdit = !!campaign
 
   const [step, setStep] = useState(0) // 0 = details, 1 = resources (create only)
@@ -559,6 +636,9 @@ export default function CampaignEditor({
 
   const showGmTitle = form.is_gm_campaign || (isEdit && campaign?.is_gm_campaign)
 
+  // Group systems for the dropdown: favorited first, then the full list.
+  const favoriteSystems = systems.filter((s) => isFavorite('system', s.id))
+
   const detailsStep = (
     <>
       <div style={{ marginBottom: 16 }}>
@@ -603,12 +683,23 @@ export default function CampaignEditor({
           style={{ ...inputStyle, appearance: 'auto' }}
         >
           <option value="">{t('campaignEditor.systemNone')}</option>
-          {systems.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
           <option value={CUSTOM_SYSTEM}>{t('campaignEditor.systemCustom')}</option>
+          {favoriteSystems.length > 0 && (
+            <optgroup label={t('campaignEditor.systemGroupFavorites')}>
+              {favoriteSystems.map((s) => (
+                <option key={`fav-${s.id}`} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <optgroup label={t('campaignEditor.systemGroupAll')}>
+            {systems.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </optgroup>
         </select>
         {form.system_id === CUSTOM_SYSTEM && (
           <input
@@ -972,6 +1063,16 @@ const resultRow = (disabled) => ({
   color: disabled ? 'var(--text-muted)' : 'var(--text)',
   cursor: disabled ? 'default' : 'pointer',
   fontSize: 13,
+})
+const typeTab = (active) => ({
+  flex: 1,
+  padding: '5px 8px',
+  fontSize: 12,
+  borderRadius: 6,
+  cursor: 'pointer',
+  border: active ? '1px solid var(--gold-dim)' : '1px solid var(--border)',
+  background: active ? 'rgba(201,168,76,0.15)' : 'var(--bg-deep)',
+  color: active ? 'var(--gold)' : 'var(--text-dim)',
 })
 const suggestedChip = {
   display: 'inline-flex',

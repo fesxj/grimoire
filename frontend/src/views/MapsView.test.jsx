@@ -102,7 +102,11 @@ describe('MapsView', () => {
 
   it('favorites filter hides non-favorite maps', async () => {
     const favMap = makeMap({ id: 'fav-map', filename: 'fav.png', relative_path: 'maps/fav.png' })
-    const otherMap = makeMap({ id: 'other-map', filename: 'other.png', relative_path: 'maps/other.png' })
+    const otherMap = makeMap({
+      id: 'other-map',
+      filename: 'other.png',
+      relative_path: 'maps/other.png',
+    })
     setupMaps([favMap, otherMap])
     mockIsFavorite.mockImplementation((type, id) => type === 'map' && id === 'fav-map')
 
@@ -117,7 +121,11 @@ describe('MapsView', () => {
 
   it('toggling favorites off restores all maps', async () => {
     const favMap = makeMap({ id: 'fav-map', filename: 'fav.png', relative_path: 'maps/fav.png' })
-    const otherMap = makeMap({ id: 'other-map', filename: 'other.png', relative_path: 'maps/other.png' })
+    const otherMap = makeMap({
+      id: 'other-map',
+      filename: 'other.png',
+      relative_path: 'maps/other.png',
+    })
     setupMaps([favMap, otherMap])
     mockIsFavorite.mockImplementation((type, id) => type === 'map' && id === 'fav-map')
 
@@ -144,9 +152,21 @@ describe('MapsView', () => {
   })
 
   it('text filter and favorites filter compose correctly', async () => {
-    const favMap = makeMap({ id: 'fav-map', filename: 'dragon.png', relative_path: 'maps/dragon.png' })
-    const otherFav = makeMap({ id: 'other-fav', filename: 'dungeon.png', relative_path: 'maps/dungeon.png' })
-    const nonFav = makeMap({ id: 'non-fav', filename: 'forest.png', relative_path: 'maps/forest.png' })
+    const favMap = makeMap({
+      id: 'fav-map',
+      filename: 'dragon.png',
+      relative_path: 'maps/dragon.png',
+    })
+    const otherFav = makeMap({
+      id: 'other-fav',
+      filename: 'dungeon.png',
+      relative_path: 'maps/dungeon.png',
+    })
+    const nonFav = makeMap({
+      id: 'non-fav',
+      filename: 'forest.png',
+      relative_path: 'maps/forest.png',
+    })
     setupMaps([favMap, otherFav, nonFav])
     mockIsFavorite.mockImplementation((type, id) => ['fav-map', 'other-fav'].includes(id))
 

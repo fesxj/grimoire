@@ -58,6 +58,7 @@ export default function TokenFolderGroup({
   onToggleToken,
   onToggleFolder,
   cardSize = 'comfortable',
+  list = false,
   canTag = true,
   onDownload,
 }) {
@@ -447,13 +448,17 @@ export default function TokenFolderGroup({
                 )}
 
                 {!isSubCollapsed && (
-                  <LazyGrid count={subTokens.length} cardSize={cardSize}>
+                  <LazyGrid count={subTokens.length} cardSize={cardSize} list={list}>
                     <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: `repeat(auto-fill, minmax(${cardSize === 'compact' ? '90px' : '130px'}, 1fr))`,
-                        gap: 12,
-                      }}
+                      style={
+                        list
+                          ? { display: 'flex', flexDirection: 'column', gap: 8 }
+                          : {
+                              display: 'grid',
+                              gridTemplateColumns: `repeat(auto-fill, minmax(${cardSize === 'compact' ? '90px' : '130px'}, 1fr))`,
+                              gap: 12,
+                            }
+                      }
                     >
                       {subTokens.map((tok) => (
                         <TokenCard
@@ -462,7 +467,8 @@ export default function TokenFolderGroup({
                           onClick={() => onSelectToken(tok.id)}
                           bulkMode={bulkMode}
                           selected={selectedTokenIds?.has(tok.id)}
-                          onToggle={() => onToggleToken(tok.id)}
+                          onToggle={(mods) => onToggleToken(tok.id, mods)}
+                          list={list}
                         />
                       ))}
                     </div>

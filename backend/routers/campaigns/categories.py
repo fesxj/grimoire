@@ -1,9 +1,12 @@
-"""GM-defined categories for grouping wiki pages and linked resources.
+"""GM-defined categories for grouping linked resources.
 
-Categories are scoped to a campaign and a `kind` ("note" or "resource"); the two
-namespaces never mix. Only the campaign owner manages them. Deleting a category
-either leaves its items uncategorized (mode="uncategorize") or removes the items
-(mode="delete_items" — wiki pages are deleted, resources are unlinked).
+Categories are scoped to a campaign and a `kind`. Today only "resource" is
+created — wiki pages nest under parent pages instead of using flat note
+categories (see WikiPage.parent_id), so "note" is no longer a creatable kind.
+The note branches below remain for the one-time migration window and for any
+legacy rows that predate the conversion. Only the campaign owner manages
+categories. Deleting one either leaves its items uncategorized
+(mode="uncategorize") or removes them (mode="delete_items").
 """
 
 from fastapi import Depends, HTTPException, Query
@@ -59,6 +62,9 @@ def create_category(
         assert_can_manage(c, current_user, db)
         if data.kind not in _KINDS:
             raise HTTPException(400, "Invalid kind")
+        if data.kind == "note":
+            # Wiki pages now nest under parent pages; note categories are retired.
+            raise HTTPException(400, "Note categories are no longer supported; nest pages instead")
         name = data.name.strip()
         if not name:
             raise HTTPException(400, "Category name is required")

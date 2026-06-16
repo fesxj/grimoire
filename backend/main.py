@@ -106,11 +106,15 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
-    from . import wiki_migration
+    from . import wiki_category_migration, wiki_migration
 
     db = SessionLocal()
     try:
+        # Roll legacy session notes into pages first, then convert the flat
+        # note-categories (including any "Session Notes" one just created) into
+        # nested parent pages.
         wiki_migration.migrate(db)
+        wiki_category_migration.migrate(db)
     except Exception as e:
         logger.error(f"Wiki migration error: {e}")
     finally:

@@ -21,7 +21,7 @@ from ...models import (
     Token,
 )
 from ._helpers import assert_can_manage, can_view, get_campaign_or_404
-from ._schemas import ResourceAdd, ResourceReorder, ResourceUpdate
+from ._schemas import ResourceAdd, ResourceBulkAdd, ResourceReorder, ResourceUpdate
 
 _VISIBILITIES = ("public", "private", "gm")
 _VIS_ORDER = {"public": 0, "private": 1, "gm": 2}
@@ -173,6 +173,54 @@ def add_resource(
         db.commit()
         db.refresh(res)
         return _serialize(db, res, include_shares=True)
+    finally:
+        db.close()
+
+
+def bulk_add_resources(
+    campaign_id: str,
+    data: ResourceBulkAdd,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Link many resources at once. Duplicates and unknown types are skipped
+    silently so one bad entry doesn't fail the whole batch. Returns the rows
+    that were actually created."""
+    db = SessionLocal()
+    try:
+        c = get_campaign_or_404(db, campaign_id)
+        assert_can_manage(c, current_user, db)
+
+        existing_keys = {
+            (r.resource_type, r.resource_id)
+            for r in db.query(CampaignResource).filter_by(campaign_id=campaign_id).all()
+        }
+        order = len(existing_keys)
+        created = []
+        for item in data.resources:
+            if item.resource_type not in ("book", "map", "token", "file"):
+                continue
+            key = (item.resource_type, item.resource_id)
+            if key in existing_keys:
+                continue
+            existing_keys.add(key)
+            visibility = item.visibility if item.visibility in _VISIBILITIES else "gm"
+            res = CampaignResource(
+                campaign_id=campaign_id,
+                resource_type=item.resource_type,
+                resource_id=item.resource_id,
+                visibility=visibility,
+                category_id=_resolve_category(db, campaign_id, item.category_id),
+                sort_order=order,
+            )
+            order += 1
+            db.add(res)
+            db.flush()
+            if visibility == "private":
+                _apply_shares(db, res.id, item.shared_user_ids)
+            created.append(res)
+
+        db.commit()
+        return [_serialize(db, r, include_shares=True) for r in created]
     finally:
         db.close()
 

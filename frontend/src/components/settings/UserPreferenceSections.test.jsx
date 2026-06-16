@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { LanguageSection } from './UserPreferenceSections'
+import { LanguageSection, LibrarySection } from './UserPreferenceSections'
+import { getUserPrefs } from '../../hooks/useUserPrefs'
+import { RECENT_DEFAULT, RECENT_MAX } from '../../hooks/useBookPrefs'
 import i18n from '../../i18n'
 
 // ---------------------------------------------------------------------------
@@ -82,5 +84,53 @@ describe('LanguageSection — language change', () => {
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'fr-CA' } })
     // The LuCircleCheck is rendered as an svg icon; the save flash is visible
     expect(document.querySelector('svg')).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// LibrarySection — recently opened limit
+// ---------------------------------------------------------------------------
+
+describe('LibrarySection — recently opened limit', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it('defaults to RECENT_DEFAULT when unset', () => {
+    render(<LibrarySection />)
+    expect(screen.getByRole('spinbutton').value).toBe(String(RECENT_DEFAULT))
+  })
+
+  it('reflects the saved limit', () => {
+    localStorage.setItem('grimoire:user-prefs', JSON.stringify({ recentLimit: 12 }))
+    render(<LibrarySection />)
+    expect(screen.getByRole('spinbutton').value).toBe('12')
+  })
+
+  it('saves a changed limit to user prefs', () => {
+    render(<LibrarySection />)
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '8' } })
+    expect(getUserPrefs().recentLimit).toBe(8)
+  })
+
+  it('clamps values above the maximum', () => {
+    render(<LibrarySection />)
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '999' } })
+    expect(getUserPrefs().recentLimit).toBe(RECENT_MAX)
+  })
+
+  it('accepts 0 to disable the feature', () => {
+    render(<LibrarySection />)
+    fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '0' } })
+    expect(getUserPrefs().recentLimit).toBe(0)
+  })
+
+  it('reverts an empty value to the default on blur', () => {
+    render(<LibrarySection />)
+    const input = screen.getByRole('spinbutton')
+    fireEvent.change(input, { target: { value: '' } })
+    fireEvent.blur(input)
+    expect(input.value).toBe(String(RECENT_DEFAULT))
+    expect(getUserPrefs().recentLimit).toBe(RECENT_DEFAULT)
   })
 })

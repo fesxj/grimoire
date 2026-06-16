@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from ...config import SessionLocal
 from ...auth import get_current_user, CurrentUser
 from ...models import Favorite, Book, GenericMap, Token, GameSystem
+from ..systems._helpers import resolve_cover_book_id
 from ._schemas import FavoriteIn
 
 router = APIRouter()
@@ -75,7 +76,7 @@ def list_favorites(user: CurrentUser = Depends(get_current_user)):
                         "item_id": s.id,
                         "name": s.name,
                         "publishers": s.publishers or [],
-                        "cover_book_id": s.cover_book_id,
+                        "cover_book_id": resolve_cover_book_id(db, s),
                     }
                 )
 

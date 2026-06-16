@@ -143,16 +143,12 @@ describe('ReaderToolbar — spread offset', () => {
 
   it('shows include-cover tooltip when offset is 0', () => {
     renderToolbar({ mode: 'spread', spreadOffset: 0 })
-    expect(
-      screen.getByTitle(/Include cover in spread/)
-    ).toBeInTheDocument()
+    expect(screen.getByTitle(/Include cover in spread/)).toBeInTheDocument()
   })
 
   it('shows exclude-cover tooltip when offset is 1', () => {
     renderToolbar({ mode: 'spread', spreadOffset: 1 })
-    expect(
-      screen.getByTitle(/Exclude cover from spread/)
-    ).toBeInTheDocument()
+    expect(screen.getByTitle(/Exclude cover from spread/)).toBeInTheDocument()
   })
 
   it('shows right page number when hasRight is true in spread mode', () => {

@@ -1,12 +1,30 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LuChevronRight, LuFileText, LuHeart, LuPencil } from 'react-icons/lu'
+import { LuChevronRight, LuFileText, LuHeart, LuPencil, LuCheck, LuDownload } from 'react-icons/lu'
 import { mediaUrl } from '../../api'
 import { CATEGORY_ICONS } from '../../constants'
 import { useFavorites } from '../../context/FavoritesContext'
 import { getBookPrefs } from '../../hooks/useBookPrefs'
+import FavoriteButton from '../FavoriteButton'
+import DownloadButton from '../DownloadButton'
 
-export default function BookRow({ book, onOpen, onEdit, editing }) {
+/**
+ * A single book entry. Renders as a list row by default; pass `card` or
+ * `compact` for the grid layouts used by the books page view-mode toggle.
+ *
+ * `bulkMode` shows a selection checkbox and suppresses the per-item actions.
+ */
+export default function BookRow({
+  book,
+  onOpen,
+  onEdit,
+  editing,
+  bulkMode,
+  selected,
+  onToggle,
+  card,
+  compact,
+}) {
   const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
   const { isFavorite, toggleFavorite } = useFavorites()
@@ -14,16 +32,246 @@ export default function BookRow({ book, onOpen, onEdit, editing }) {
 
   const lastPage = getBookPrefs(book.id).page || 0
   const progress = book.page_count > 0 && lastPage > 1 ? Math.min(lastPage / book.page_count, 1) : 0
+  const fav = isFavorite('book', book.id)
 
+  const handleClick = (e) => {
+    if (bulkMode) {
+      e.stopPropagation()
+      onToggle({ shift: e.shiftKey, meta: e.metaKey || e.ctrlKey })
+      return
+    }
+    onOpen()
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleClick(e)
+    }
+  }
+
+  // Overlaid checkbox shown over thumbnails in the grid layouts.
+  const overlayCheckbox = bulkMode && (
+    <div
+      aria-hidden="true"
+      style={{
+        position: 'absolute',
+        top: 8,
+        left: 8,
+        zIndex: 2,
+        width: 20,
+        height: 20,
+        borderRadius: 4,
+        background: selected ? 'var(--gold)' : 'rgba(0,0,0,0.55)',
+        border: selected ? 'none' : '2px solid rgba(255,255,255,0.45)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.4)',
+      }}
+    >
+      {selected && <LuCheck size={12} color="var(--bg-deep)" strokeWidth={3} />}
+    </div>
+  )
+
+  // Favorite + download actions used in the card body / list end. Shown on
+  // hover for the grid layouts (matching the favorite-button behaviour) and
+  // always in the list layout.
+  const actions = (alwaysVisible) => {
+    const visible = alwaysVisible || fav || hovered
+    return (
+      <div
+        style={{
+          display: 'flex',
+          gap: 2,
+          alignItems: 'center',
+          flexShrink: 0,
+          opacity: visible ? 1 : 0,
+          transition: 'opacity 0.15s',
+          pointerEvents: visible ? 'auto' : 'none',
+        }}
+      >
+        <a
+          href={mediaUrl(`/books/${book.id}/file`)}
+          download
+          onClick={(e) => e.stopPropagation()}
+          aria-label={t('common.download')}
+          title={t('common.download')}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            padding: '6px',
+            color: 'var(--text-muted)',
+          }}
+        >
+          <LuDownload size={15} aria-hidden="true" />
+        </a>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            toggleFavorite('book', book.id)
+          }}
+          aria-label={fav ? t('common.removeFromFavorites') : t('common.addToFavorites')}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            padding: '6px',
+          }}
+        >
+          <LuHeart
+            size={16}
+            aria-hidden="true"
+            color={fav ? 'var(--gold)' : 'var(--text-muted)'}
+            fill={fav ? 'var(--gold)' : 'none'}
+          />
+        </button>
+      </div>
+    )
+  }
+
+  // ----- Grid layouts (card / compact) -----
+  if (card || compact) {
+    const thumbHeight = compact ? 110 : 160
+    return (
+      <div
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label={t('bookRow.openBook', { title: book.title })}
+        aria-pressed={bulkMode ? selected : undefined}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          background: selected ? 'var(--bg-card-hover)' : 'var(--bg-card)',
+          border: selected ? '1px solid var(--gold-dim)' : '1px solid var(--border)',
+          borderRadius: 8,
+          cursor: bulkMode ? 'default' : 'pointer',
+          transition: 'border-color 0.15s, background 0.15s',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+        onMouseOver={(e) => {
+          if (!bulkMode && !selected) e.currentTarget.style.borderColor = 'var(--border-light)'
+        }}
+        onMouseOut={(e) => {
+          if (!selected) e.currentTarget.style.borderColor = 'var(--border)'
+        }}
+      >
+        {overlayCheckbox}
+        {!bulkMode && <DownloadButton type="books" id={book.id} cardHovered={hovered} />}
+        {!bulkMode && <FavoriteButton type="book" id={book.id} cardHovered={hovered} />}
+        <div
+          style={{
+            width: '100%',
+            height: thumbHeight,
+            background: 'var(--bg-deep)',
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {book.has_thumbnail ? (
+            <img
+              src={mediaUrl(`/books/${book.id}/thumbnail`)}
+              alt=""
+              loading="lazy"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            <CatIcon size={28} color="var(--text-muted)" style={{ opacity: 0.4 }} />
+          )}
+          {progress > 0 && (
+            <div
+              style={{
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                right: 0,
+                height: 2,
+                background: 'var(--bg-deep)',
+              }}
+            >
+              <div
+                style={{
+                  width: `${progress * 100}%`,
+                  height: '100%',
+                  background: 'var(--gold-dim)',
+                }}
+              />
+            </div>
+          )}
+        </div>
+        <div style={{ padding: compact ? '8px 10px' : '10px 12px', minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: compact ? 13 : 15,
+              fontWeight: 500,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {book.title}
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginTop: 4,
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                fontSize: 12,
+                color: 'var(--text-muted)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {book.page_count > 0 ? t('bookRow.pages', { count: book.page_count }) : ' '}
+            </span>
+            {!bulkMode && onEdit && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onEdit()
+                }}
+                aria-label={t('bookRow.editBook')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  padding: '4px',
+                  flexShrink: 0,
+                  color: editing ? 'var(--gold)' : 'var(--text-muted)',
+                }}
+              >
+                <LuPencil size={14} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ----- List layout (default) -----
   return (
     <div
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onOpen()
-        }
-      }}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
       role="button"
       tabIndex={0}
       aria-label={t('bookRow.openBook', { title: book.title })}
@@ -63,6 +311,25 @@ export default function BookRow({ book, onOpen, onEdit, editing }) {
               transition: 'width 0.3s',
             }}
           />
+        </div>
+      )}
+
+      {bulkMode && (
+        <div
+          aria-hidden="true"
+          style={{
+            width: 20,
+            height: 20,
+            flexShrink: 0,
+            borderRadius: 5,
+            border: `2px solid ${selected ? 'var(--gold)' : 'var(--text-muted)'}`,
+            background: selected ? 'var(--gold)' : 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {selected && <LuCheck size={13} color="var(--bg-deep)" strokeWidth={3} />}
         </div>
       )}
 
@@ -216,8 +483,8 @@ export default function BookRow({ book, onOpen, onEdit, editing }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
-        {onEdit && (
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+        {!bulkMode && onEdit && (
           <button
             onClick={(e) => {
               e.stopPropagation()
@@ -237,33 +504,8 @@ export default function BookRow({ book, onOpen, onEdit, editing }) {
             <LuPencil size={14} aria-hidden="true" />
           </button>
         )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            toggleFavorite('book', book.id)
-          }}
-          aria-label={
-            isFavorite('book', book.id)
-              ? t('common.removeFromFavorites')
-              : t('common.addToFavorites')
-          }
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            padding: '8px 10px',
-            margin: '-8px -4px',
-          }}
-        >
-          <LuHeart
-            size={16}
-            aria-hidden="true"
-            color={isFavorite('book', book.id) ? 'var(--gold)' : 'var(--text-muted)'}
-            fill={isFavorite('book', book.id) ? 'var(--gold)' : 'none'}
-          />
-        </button>
-        <LuChevronRight size={16} color="var(--text-muted)" aria-hidden="true" />
+        {!bulkMode && actions(true)}
+        {!bulkMode && <LuChevronRight size={16} color="var(--text-muted)" aria-hidden="true" />}
       </div>
     </div>
   )

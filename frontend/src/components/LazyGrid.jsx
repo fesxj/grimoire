@@ -8,9 +8,10 @@ import { useState, useEffect, useRef } from 'react'
  * Props:
  *   count     — number of items (used to estimate placeholder height before render)
  *   cardSize  — 'compact' | 'comfortable' (affects estimated card width)
+ *   list      — when true, items stack one-per-row (affects height estimate)
  *   children  — the actual card grid to render when visible
  */
-export default function LazyGrid({ count, cardSize, children }) {
+export default function LazyGrid({ count, cardSize, list, children }) {
   const [rendered, setRendered] = useState(false)
   const [measuredHeight, setMeasuredHeight] = useState(null)
   const placeholderRef = useRef(null)
@@ -39,12 +40,20 @@ export default function LazyGrid({ count, cardSize, children }) {
   }, [rendered])
 
   if (!rendered) {
-    // Estimate: cards are ~(cardWidth + gap) wide, ~(190px + gap) tall
-    const cardW = cardSize === 'compact' ? 156 : 216
-    const cardH = cardSize === 'compact' ? 190 : 230
-    const cols = Math.max(1, Math.floor((window.innerWidth - 120) / cardW))
-    const rows = Math.ceil(count / cols)
-    const estimatedHeight = measuredHeight ?? rows * (cardH + 16)
+    // List mode stacks one row per item (~60px tall incl. gap); grid mode
+    // estimates from card width/height.
+    let estimatedHeight
+    if (measuredHeight != null) {
+      estimatedHeight = measuredHeight
+    } else if (list) {
+      estimatedHeight = count * 60
+    } else {
+      const cardW = cardSize === 'compact' ? 156 : 216
+      const cardH = cardSize === 'compact' ? 190 : 230
+      const cols = Math.max(1, Math.floor((window.innerWidth - 120) / cardW))
+      const rows = Math.ceil(count / cols)
+      estimatedHeight = rows * (cardH + 16)
+    }
     return <div ref={placeholderRef} style={{ minHeight: estimatedHeight }} />
   }
 

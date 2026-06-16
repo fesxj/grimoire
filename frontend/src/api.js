@@ -58,10 +58,18 @@ export const campaigns = {
     api.upload(`/campaigns/${id}/members/${memberId}/sheet`, file),
   deleteMemberSheet: (id, memberId) => api.delete(`/campaigns/${id}/members/${memberId}/sheet`),
   memberSheetUrl: (id, memberId) => mediaUrl(`/campaigns/${id}/members/${memberId}/sheet`),
+  getMemberSheetFields: (id, memberId) =>
+    api.get(`/campaigns/${id}/members/${memberId}/sheet/fields`),
+  saveMemberSheetFields: (id, memberId, fields) =>
+    api.put(`/campaigns/${id}/members/${memberId}/sheet/fields`, { fields }),
+  duplicateMemberSheet: (id, memberId, body) =>
+    api.post(`/campaigns/${id}/members/${memberId}/sheet/duplicate`, body),
+  listSheetSources: (id) => api.get(`/campaigns/${id}/sheet-sources`),
 
   // Resources
   listResources: (id) => api.get(`/campaigns/${id}/resources`),
   addResource: (id, data) => api.post(`/campaigns/${id}/resources`, data),
+  bulkAddResources: (id, resources) => api.post(`/campaigns/${id}/resources/bulk`, { resources }),
   updateResource: (id, resourceId, patch) =>
     api.patch(`/campaigns/${id}/resources/${resourceId}`, patch),
   reorderResources: (id, orderedIds) =>
@@ -72,10 +80,11 @@ export const campaigns = {
   // GM-uploaded campaign files (linked as resource_type='file')
   uploadFile: (id, file) => api.upload(`/campaigns/${id}/files`, file),
   fileUrl: (id, fileId) => mediaUrl(`/campaigns/${id}/files/${fileId}`),
-  searchResources: (q = '', resourceType = '') => {
+  searchResources: (q = '', resourceType = '', systemId = '') => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     if (resourceType) params.set('resource_type', resourceType)
+    if (systemId) params.set('system_id', systemId)
     params.set('limit', '40')
     return api.get(`/campaigns/resources/search?${params.toString()}`)
   },
@@ -102,6 +111,9 @@ export const campaigns = {
   wikiTitles: (id) => api.get(`/campaigns/${id}/wiki/titles`),
   reorderWikiPages: (id, orderedIds) =>
     api.put(`/campaigns/${id}/wiki/reorder`, { ordered_ids: orderedIds }),
+  exportWiki: (id, format) =>
+    api.download(`/campaigns/${id}/wiki/export?format=${format}`, `wiki.${format}`),
+  importWiki: (id, file) => api.upload(`/campaigns/${id}/wiki/import`, file),
 
   // Categories (kind: 'note' | 'resource')
   listCategories: (id, kind) =>
@@ -172,6 +184,37 @@ const api = {
 
   delete: (url) =>
     fetch(`/api${url}`, { method: 'DELETE', headers: authHeaders() }).then(handleResponse),
+
+  // Fetch a file response and trigger a browser download. The server's
+  // Content-Disposition filename wins; `fallback` is used only if it's absent.
+  download: async (url, fallback) => {
+    const res = await fetch(`/api${url}`, { headers: authHeaders() })
+    if (res.status === 401) {
+      window.dispatchEvent(new CustomEvent('grimoire:unauthorized'))
+      throw Object.assign(new Error('Unauthorized'), { status: 401 })
+    }
+    if (!res.ok) {
+      let detail = 'Request failed'
+      try {
+        detail = (await res.json()).detail || detail
+      } catch {
+        // non-JSON error body
+      }
+      throw Object.assign(new Error(detail), { status: res.status })
+    }
+    const disposition = res.headers.get('Content-Disposition') || ''
+    const match = disposition.match(/filename="?([^"]+)"?/)
+    const filename = match ? match[1] : fallback
+    const blob = await res.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(objectUrl)
+  },
 
   // Multipart upload — do NOT set Content-Type so the browser adds the boundary.
   upload: (url, file) => {

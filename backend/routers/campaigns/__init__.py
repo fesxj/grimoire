@@ -19,6 +19,7 @@ from .core import (
 from .resources import (
     list_resources,
     add_resource,
+    bulk_add_resources,
     update_resource,
     reorder_resources,
     remove_resource,
@@ -54,6 +55,12 @@ from .uploads import (
     upload_campaign_file,
     get_campaign_file,
 )
+from .sheets import (
+    get_member_sheet_fields,
+    save_member_sheet_fields,
+    duplicate_member_sheet,
+    list_sheet_sources,
+)
 from .wiki import (
     list_pages,
     get_page,
@@ -64,6 +71,7 @@ from .wiki import (
     page_titles,
     reorder_pages,
 )
+from .wiki_io import export_wiki, import_wiki
 from .categories import (
     list_categories,
     create_category,
@@ -191,6 +199,30 @@ router.add_api_route(
     summary="Remove a member's character sheet",
     status_code=204,
 )
+router.add_api_route(
+    "/{campaign_id}/members/{member_id}/sheet/fields",
+    get_member_sheet_fields,
+    methods=["GET"],
+    summary="Read a member's character sheet form fields",
+)
+router.add_api_route(
+    "/{campaign_id}/members/{member_id}/sheet/fields",
+    save_member_sheet_fields,
+    methods=["PUT"],
+    summary="Write a member's character sheet form fields",
+)
+router.add_api_route(
+    "/{campaign_id}/members/{member_id}/sheet/duplicate",
+    duplicate_member_sheet,
+    methods=["POST"],
+    summary="Duplicate a blank sheet into a member's slot",
+)
+router.add_api_route(
+    "/{campaign_id}/sheet-sources",
+    list_sheet_sources,
+    methods=["GET"],
+    summary="List blank sheets a member can duplicate",
+)
 
 # --- Resources ---
 router.add_api_route(
@@ -201,6 +233,13 @@ router.add_api_route(
     add_resource,
     methods=["POST"],
     summary="Link a resource to a campaign",
+    status_code=201,
+)
+router.add_api_route(
+    "/{campaign_id}/resources/bulk",
+    bulk_add_resources,
+    methods=["POST"],
+    summary="Link many resources at once",
     status_code=201,
 )
 router.add_api_route(
@@ -364,6 +403,19 @@ router.add_api_route(
     reorder_pages,
     methods=["PUT"],
     summary="Reorder wiki pages (drag-and-drop)",
+)
+router.add_api_route(
+    "/{campaign_id}/wiki/export",
+    export_wiki,
+    methods=["GET"],
+    summary="Export campaign wiki (md zip or json bundle)",
+)
+router.add_api_route(
+    "/{campaign_id}/wiki/import",
+    import_wiki,
+    methods=["POST"],
+    summary="Import wiki pages (markdown / json / LegendKeeper)",
+    status_code=201,
 )
 router.add_api_route(
     "/{campaign_id}/wiki/{page_id}", get_page, methods=["GET"], summary="Get a wiki page"

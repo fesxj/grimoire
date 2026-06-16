@@ -58,6 +58,10 @@ class ResourceUpdate(BaseModel):
     category_id: Optional[str] = None
 
 
+class ResourceBulkAdd(BaseModel):
+    resources: List[ResourceAdd]
+
+
 class ResourceReorder(BaseModel):
     ordered_ids: List[str]
 
@@ -119,7 +123,7 @@ class WikiPageCreate(BaseModel):
     page_type: str = "note"  # note | session
     session_date: Optional[str] = None  # YYYY-MM-DD for session pages
     shared_user_ids: Optional[List[str]] = None  # for members visibility
-    category_id: Optional[str] = None
+    parent_id: Optional[str] = None  # nest under another page; null/"" = top level
     icon: Optional[str] = None  # Lucide icon name
 
 
@@ -130,8 +134,8 @@ class WikiPageUpdate(BaseModel):
     page_type: Optional[str] = None
     session_date: Optional[str] = None
     shared_user_ids: Optional[List[str]] = None
-    # Use the sentinel "" to clear the category (move to Uncategorized).
-    category_id: Optional[str] = None
+    # Use the sentinel "" to move the page back to the top level (no parent).
+    parent_id: Optional[str] = None
     icon: Optional[str] = None  # "" clears it
 
 

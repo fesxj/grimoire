@@ -88,6 +88,7 @@ def init_db(db_path: str):
             "ALTER TABLE campaign_members ADD COLUMN character_sheet_url VARCHAR(1000)",
             "ALTER TABLE wiki_pages ADD COLUMN sort_order INTEGER DEFAULT 0",
             "ALTER TABLE wiki_pages ADD COLUMN icon VARCHAR(50)",
+            "ALTER TABLE wiki_pages ADD COLUMN parent_id VARCHAR(36)",
             "ALTER TABLE campaign_categories ADD COLUMN icon VARCHAR(50)",
             "ALTER TABLE campaigns ADD COLUMN system_name VARCHAR(255)",
             "ALTER TABLE campaign_schedules ADD COLUMN enabled BOOLEAN DEFAULT 1 NOT NULL",

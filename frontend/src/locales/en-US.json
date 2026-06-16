@@ -80,7 +80,8 @@
     "sizeMB": "{{size}} MB",
     "sizeGB": "{{size}} GB",
     "addToFavorites": "Add to favorites",
-    "removeFromFavorites": "Remove from favorites"
+    "removeFromFavorites": "Remove from favorites",
+    "select": "Select"
   },
   "login": {
     "username": "Username",
@@ -117,7 +118,14 @@
     "bookCount_one": "{{count}} book",
     "bookCount_other": "{{count}} books",
     "agnosticTitle": "System-Agnostic",
-    "agnosticSubtitle": "Reference material, zines, and books not tied to a single game system."
+    "agnosticSubtitle": "Reference material, zines, and books not tied to a single game system.",
+    "viewMode": {
+      "card": "Cards",
+      "compact": "Compact",
+      "list": "List",
+      "toggle": "Change view",
+      "toggleWithMode": "Change view (currently {{mode}})"
+    }
   },
   "systemDetail": {
     "backToLibrary": "Back to Library",
@@ -420,9 +428,13 @@
       "title": "Library Browsing",
       "description": "Display preferences for the library, maps, and tokens views.",
       "sortOrder": "Sort order",
-      "cardSize": "Card size",
-      "comfortable": "Comfortable",
-      "compact": "Compact"
+      "viewMode": "Default view",
+      "viewModeSystems": "Systems",
+      "viewModeBooks": "Books",
+      "viewModeMaps": "Maps",
+      "viewModeTokens": "Tokens",
+      "recentLimit": "Recently opened books",
+      "recentLimitHint": "How many recently opened books to remember (0–{{max}}). Set to 0 to hide the section."
     },
     "language": {
       "title": "Language",
@@ -693,6 +705,8 @@
     "descriptionPlaceholder": "A brief description of this campaign...",
     "systemLabel": "Game System",
     "systemNone": "— None —",
+    "systemGroupFavorites": "Favorites",
+    "systemGroupAll": "All systems",
     "gmTitleLabel": "Your Title",
     "gmTitlePlaceholder": "Dungeon Master, Game Master, Navigator...",
     "gmTitleHint": "How players see your role (e.g. Dungeon Master, Keeper, Warden)",
@@ -715,7 +729,13 @@
       "visibilityLabel": "Visibility",
       "visShared": "Shared with players",
       "visGm": "GM only",
-      "visPrivate": "Private to owner"
+      "visPrivate": "Private to owner",
+      "type_all": "All",
+      "type_book": "Books",
+      "type_map": "Maps",
+      "type_token": "Tokens",
+      "systemFilterLabel": "Filter by game system",
+      "systemFilterAll": "All systems"
     },
     "bannerLabel": "Banner (optional)",
     "bannerChoose": "Choose an image…",
@@ -744,7 +764,20 @@
     "removeSheet": "Remove sheet",
     "characterSheetLink": "Character sheet (link)",
     "linkSheet": "Add link",
-    "sheetUrlPlaceholder": "https://… sheet or PDF"
+    "sheetUrlPlaceholder": "https://… sheet or PDF",
+    "editSheetInApp": "Edit in app",
+    "editSheetTitle": "Edit character sheet",
+    "sheetNotFillable": "This PDF has no fillable form fields, so it can only be downloaded, edited externally, and re-uploaded.",
+    "saving": "Saving…",
+    "createFromTemplate": "Create from template",
+    "chooseTemplate": "Choose a template",
+    "librarySheets": "Library",
+    "campaignSheets": "Campaign files",
+    "noTemplates": "No form-fillable sheets are available. Add a PDF to the library Character Sheets category or upload one to this campaign.",
+    "replaceSheet": "Replace sheet",
+    "replaceSheetWarning": "Uploading a new sheet replaces the current one. The previous version cannot be recovered.",
+    "downloadCurrent": "Download current",
+    "replace": "Replace"
   },
   "sessions": {
     "title": "Session Notes",
@@ -1043,11 +1076,23 @@
     "embed_map": "Map",
     "embed_token": "Token",
     "embedBookPage": "Book — p. {{page}}",
-    "manageGroups": "Manage groups",
-    "uncategorized": "Uncategorized",
-    "groupLabel": "Group",
-    "emptyGroup": "No pages yet",
-    "iconLabel": "Icon"
+    "parentLabel": "Parent page",
+    "noParent": "Top level",
+    "addSubpage": "Add subpage",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "iconLabel": "Icon",
+    "export": "Export",
+    "exportMd": "Export as Markdown (.zip)",
+    "exportJson": "Export as JSON",
+    "import": "Import",
+    "importTitle": "Import wiki pages",
+    "importHint": "Add pages from Markdown, a Grimoire JSON bundle, or a LegendKeeper export. Page nesting is preserved. Existing pages are never overwritten.",
+    "importFormats": "Accepts .zip, .json, .lk, .md, .markdown, or .txt.",
+    "chooseFile": "Choose file",
+    "importing": "Importing…",
+    "imported": "Imported {{count}} page",
+    "imported_other": "Imported {{count}} pages"
   },
   "campaignNotes": {
     "backToOverview": "Back to overview"
@@ -1069,5 +1114,38 @@
   "iconPicker": {
     "label": "Choose an icon",
     "none": "No icon"
+  },
+  "bulk": {
+    "hint": "Click items or folder headers to select them. Shift-click for a range, ⌘/Ctrl-click to toggle.",
+    "tagsPlaceholder": "Tags to add, comma-separated…",
+    "addTags": "Add Tags",
+    "applying": "Applying…",
+    "addToCampaign": "Add to campaign",
+    "edit": "Bulk edit"
+  },
+  "addToCampaign": {
+    "intro_one": "Add 1 item to a campaign you run.",
+    "intro_other": "Add {{count}} items to a campaign you run.",
+    "campaignLabel": "Campaign",
+    "add": "Add",
+    "noCampaigns": "You don't run any campaigns to add resources to."
+  },
+  "bulkEdit": {
+    "title_one": "Edit 1 item",
+    "title_other": "Edit {{count}} items",
+    "position": "{{current}} of {{total}}",
+    "saveAll": "Save all",
+    "tagsPlaceholder": "Comma-separated tags",
+    "field_title": "Title",
+    "field_category": "Category",
+    "field_description": "Description",
+    "field_publisher": "Publisher",
+    "field_year": "Year",
+    "field_tags": "Tags",
+    "field_mapType": "Map type",
+    "field_gridSize": "Grid size",
+    "field_explicit": "Explicit content",
+    "previous": "Previous",
+    "next": "Next"
   }
 }

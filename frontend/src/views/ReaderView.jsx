@@ -133,7 +133,11 @@ export default function ReaderView() {
   useEffect(() => {
     if (!book || mode === 'pdf') return
     const pages = [currentPage]
-    if (mode === 'spread' && (spreadOffset === 1 || currentPage !== 1) && currentPage + 1 <= totalPages)
+    if (
+      mode === 'spread' &&
+      (spreadOffset === 1 || currentPage !== 1) &&
+      currentPage + 1 <= totalPages
+    )
       pages.push(currentPage + 1)
     pages.forEach((p) => {
       if (pageTextCacheRef.current[p] !== undefined) return
@@ -152,7 +156,11 @@ export default function ReaderView() {
   useEffect(() => {
     if (!book || book.mime_type !== 'application/pdf' || mode === 'pdf') return
     const pages = [currentPage]
-    if (mode === 'spread' && (spreadOffset === 1 || currentPage !== 1) && currentPage + 1 <= totalPages)
+    if (
+      mode === 'spread' &&
+      (spreadOffset === 1 || currentPage !== 1) &&
+      currentPage + 1 <= totalPages
+    )
       pages.push(currentPage + 1)
     pages.forEach((p) => {
       if (wordsCacheRef.current[p] !== undefined) return
@@ -316,7 +324,8 @@ export default function ReaderView() {
 
   const rightPage = currentPage + 1
   // With offset=0: page 1 stands alone; with offset=1, page 1 pairs with page 2.
-  const hasRight = mode === 'spread' && (spreadOffset === 1 || currentPage !== 1) && rightPage <= totalPages
+  const hasRight =
+    mode === 'spread' && (spreadOffset === 1 || currentPage !== 1) && rightPage <= totalPages
 
   const getAlt = (p) => {
     const text = pageTextCacheRef.current[p]
@@ -712,7 +721,9 @@ function ImageBookViewer({ book, bookId, backPath }) {
         <button
           onClick={() => toggleFavorite('book', bookId)}
           title={
-            isFavorite('book', bookId) ? t('reader.removeFromFavorites') : t('reader.addToFavorites')
+            isFavorite('book', bookId)
+              ? t('reader.removeFromFavorites')
+              : t('reader.addToFavorites')
           }
           style={{
             ...btnStyle,

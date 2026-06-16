@@ -1,13 +1,19 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useSessionState from '../hooks/useSessionState'
 import { useTranslation } from 'react-i18next'
-import { LuMap, LuX, LuTag, LuSearch, LuHeart } from 'react-icons/lu'
+import { LuMap, LuX, LuListChecks, LuSearch, LuHeart } from 'react-icons/lu'
 import api from '../api'
 import Spinner from '../components/Spinner'
 import MapFolderGroup from '../components/maps/MapCreatorGroup'
 import DownloadArchiveModal from '../components/DownloadArchiveModal'
+import BulkActionBar from '../components/BulkActionBar'
+import AddToCampaignModal from '../components/AddToCampaignModal'
+import BulkEditModal from '../components/BulkEditModal'
+import useBulkSelection from '../hooks/useBulkSelection'
 import { getUserPrefs } from '../hooks/useUserPrefs'
+import useViewMode from '../hooks/useViewMode'
+import ViewModeToggle from '../components/ViewModeToggle'
 import { useAuth } from '../context/AuthContext'
 import { useFavorites } from '../context/FavoritesContext'
 
@@ -37,18 +43,18 @@ export default function MapsView() {
   const [filter, setFilter] = useState('')
   const [selectedTags, setSelectedTags] = useState(new Set())
   const [favOnly, setFavOnly] = useState(false)
+  const [viewMode, cycleViewMode] = useViewMode('map')
   const [collapsed, setCollapsed] = useSessionState('grimoire:maps:collapsed', new Set())
   const [editingFolder, setEditingFolder] = useState(null)
   const [showAllTags, setShowAllTags] = useState(false)
   const [downloadModal, setDownloadModal] = useState(null)
 
-  // Bulk tagging
-  const [bulkMode, setBulkMode] = useState(false)
-  const [selectedMapIds, setSelectedMapIds] = useState(new Set())
-  const [selectedFolderPaths, setSelectedFolderPaths] = useState(new Set())
-  const [bulkInput, setBulkInput] = useState('')
+  // Bulk multiselect
+  const bulk = useBulkSelection()
+  const { bulkMode, selectedIds: selectedMapIds, selectedFolderPaths, count: totalSelected } = bulk
   const [bulkApplying, setBulkApplying] = useState(false)
-  const bulkInputRef = useRef(null)
+  const [showAddToCampaign, setShowAddToCampaign] = useState(false)
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
 
   useEffect(() => {
     Promise.all([api.get('/maps'), api.get('/map-folders')]).then(([mapsData, foldersData]) => {
@@ -83,50 +89,8 @@ export default function MapsView() {
     setFolderTags((prev) => ({ ...prev, [path]: tags }))
   }
 
-  const enterBulkMode = () => {
-    setBulkMode(true)
-    setTimeout(() => bulkInputRef.current?.focus(), 50)
-  }
-
-  const exitBulkMode = () => {
-    setBulkMode(false)
-    setSelectedMapIds(new Set())
-    setSelectedFolderPaths(new Set())
-    setBulkInput('')
-  }
-
-  const toggleMapSelect = (id) =>
-    setSelectedMapIds((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-
-  const toggleFolderSelect = (folderPath, mapsInFolder) => {
-    const mapIds = mapsInFolder.map((m) => m.id)
-    const allSel =
-      selectedFolderPaths.has(folderPath) && mapIds.every((id) => selectedMapIds.has(id))
-    setSelectedFolderPaths((prev) => {
-      const next = new Set(prev)
-      allSel ? next.delete(folderPath) : next.add(folderPath)
-      return next
-    })
-    setSelectedMapIds((prev) => {
-      const next = new Set(prev)
-      if (allSel) mapIds.forEach((id) => next.delete(id))
-      else mapIds.forEach((id) => next.add(id))
-      return next
-    })
-  }
-
-  const applyBulkTags = async () => {
-    const newTags = bulkInput
-      .split(',')
-      .map((tag) => tag.trim().toLowerCase())
-      .filter(Boolean)
-    const totalSel = selectedMapIds.size + selectedFolderPaths.size
-    if (!newTags.length || totalSel === 0 || bulkApplying) return
-
+  const applyBulkTags = async (newTags) => {
+    if (!newTags.length || totalSelected === 0 || bulkApplying) return
     setBulkApplying(true)
     const promises = []
 
@@ -157,12 +121,19 @@ export default function MapsView() {
       }),
     }))
 
-    setBulkInput('')
-    setSelectedMapIds(new Set())
-    setSelectedFolderPaths(new Set())
+    bulk.clear()
     setBulkApplying(false)
-    bulkInputRef.current?.focus()
   }
+
+  // Objects (not just ids) for the selected maps, for the bulk-edit modal.
+  const selectedMapObjects = () => maps.maps.filter((m) => selectedMapIds.has(m.id))
+
+  // Apply edited fields from the bulk-edit modal back into local state.
+  const applyMapEdits = (edited) =>
+    setMaps((prev) => ({
+      ...prev,
+      maps: prev.maps.map((m) => (edited[m.id] ? { ...m, ...edited[m.id] } : m)),
+    }))
 
   if (!maps)
     return (
@@ -218,12 +189,17 @@ export default function MapsView() {
   })
 
   const prefs = getUserPrefs()
-  const cardSize = prefs.cardSize || 'comfortable'
+  const list = viewMode === 'list'
+  const cardSize = viewMode === 'compact' ? 'compact' : 'comfortable'
   const sort = prefs.librarySort || 'az'
   const folderEntries = Object.entries(byFolder).sort(([a], [b]) =>
     sort === 'za' ? b.localeCompare(a) : a.localeCompare(b)
   )
-  const totalSelected = selectedMapIds.size + selectedFolderPaths.size
+  // Flat ordered list of visible map ids, for shift-range selection.
+  const orderedIds = folderEntries.flatMap(([, subfolders]) =>
+    Object.values(subfolders).flatMap((ms) => ms.map((m) => m.id))
+  )
+  const toggleMapSelect = (id, mods = {}) => bulk.toggleItem(id, { ...mods, orderedIds })
 
   return (
     <div
@@ -363,7 +339,7 @@ export default function MapsView() {
               })()}
               {!isPlayer && (
                 <button
-                  onClick={bulkMode ? exitBulkMode : enterBulkMode}
+                  onClick={bulkMode ? bulk.exit : bulk.enter}
                   style={{
                     ...toolBtnStyle,
                     color: bulkMode ? 'var(--gold)' : 'var(--text-dim)',
@@ -373,10 +349,11 @@ export default function MapsView() {
                     gap: 6,
                   }}
                 >
-                  <LuTag size={13} />
-                  {bulkMode ? t('maps.cancelBulk') : t('maps.bulkTag')}
+                  <LuListChecks size={13} />
+                  {bulkMode ? t('maps.cancelBulk') : t('common.select')}
                 </button>
               )}
+              <ViewModeToggle mode={viewMode} onCycle={cycleViewMode} style={toolBtnStyle} />
               <button
                 onClick={() => setFavOnly((v) => !v)}
                 aria-pressed={favOnly}
@@ -473,7 +450,7 @@ export default function MapsView() {
 
         {bulkMode && (
           <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 20 }}>
-            {t('maps.bulkHint')}
+            {t('bulk.hint')}
           </p>
         )}
 
@@ -483,6 +460,7 @@ export default function MapsView() {
             folder={folder}
             subfolders={subfolders}
             cardSize={cardSize}
+            list={list}
             collapsed={collapsed}
             onToggle={toggle}
             folderTags={folderTags}
@@ -495,7 +473,7 @@ export default function MapsView() {
             selectedMapIds={selectedMapIds}
             selectedFolderPaths={selectedFolderPaths}
             onToggleMap={toggleMapSelect}
-            onToggleFolder={toggleFolderSelect}
+            onToggleFolder={bulk.toggleFolder}
             onDownload={setDownloadModal}
           />
         ))}
@@ -503,7 +481,13 @@ export default function MapsView() {
         {folderEntries.length === 0 && (
           <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}>
             <LuMap size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
-            <p>{favOnly ? t('favorites.noFavoritesInView') : filter ? t('maps.noMapsFilter') : t('maps.noMaps')}</p>
+            <p>
+              {favOnly
+                ? t('favorites.noFavoritesInView')
+                : filter
+                  ? t('maps.noMapsFilter')
+                  : t('maps.noMaps')}
+            </p>
           </div>
         )}
       </div>
@@ -516,80 +500,39 @@ export default function MapsView() {
         />
       )}
 
-      {/* Bulk action bar */}
       {bulkMode && (
-        <>
-          <style>{`
-            .bulk-bar { display: grid; grid-template-areas: 'count input' 'apply done'; grid-template-columns: auto 1fr; gap: 8px; }
-            .bulk-bar-apply { justify-self: start; }
-            .bulk-bar-done  { justify-self: end; }
-            @media (min-width: 600px) {
-              .bulk-bar { grid-template-areas: 'count input apply done'; grid-template-columns: auto minmax(0, 400px) auto auto; align-items: center; justify-content: start; }
-            }
-          `}</style>
-          <div
-            className="bulk-bar"
-            style={{
-              position: 'sticky',
-              bottom: 0,
-              zIndex: 200,
-              background: 'var(--bg-panel)',
-              borderTop: '1px solid var(--border)',
-              padding: '12px 16px',
-              boxSizing: 'border-box',
-            }}
-          >
-            <span
-              style={{
-                gridArea: 'count',
-                fontSize: 14,
-                color: totalSelected > 0 ? 'var(--text)' : 'var(--text-muted)',
-                alignSelf: 'center',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {totalSelected > 0
-                ? t('common.selected', { count: totalSelected })
-                : t('common.nothingSelected')}
-            </span>
-            <input
-              id="maps-bulk-tag-input"
-              ref={bulkInputRef}
-              type="text"
-              aria-label={t('maps.tagsPlaceholder')}
-              value={bulkInput}
-              onChange={(e) => setBulkInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && applyBulkTags()}
-              placeholder={t('maps.tagsPlaceholder')}
-              style={{ gridArea: 'input', fontSize: 14, width: '100%', boxSizing: 'border-box' }}
-            />
-            <button
-              onClick={applyBulkTags}
-              disabled={!bulkInput.trim() || totalSelected === 0 || bulkApplying}
-              className="bulk-bar-apply"
-              style={{
-                gridArea: 'apply',
-                padding: '7px 18px',
-                borderRadius: 6,
-                fontSize: 14,
-                cursor: 'pointer',
-                background: 'var(--gold-dim)',
-                color: 'var(--bg-deep)',
-                border: 'none',
-                opacity: !bulkInput.trim() || totalSelected === 0 || bulkApplying ? 0.5 : 1,
-              }}
-            >
-              {bulkApplying ? t('maps.applying') : t('maps.addTags')}
-            </button>
-            <button
-              onClick={exitBulkMode}
-              className="bulk-bar-done"
-              style={{ gridArea: 'done', ...toolBtnStyle }}
-            >
-              {t('common.done')}
-            </button>
-          </div>
-        </>
+        <BulkActionBar
+          count={totalSelected}
+          applying={bulkApplying}
+          onApplyTags={applyBulkTags}
+          onAddToCampaign={() => setShowAddToCampaign(true)}
+          onBulkEdit={() => setShowBulkEdit(true)}
+          onDone={bulk.exit}
+        />
+      )}
+
+      {showAddToCampaign && (
+        <AddToCampaignModal
+          items={selectedMapObjects().map((m) => ({ resource_type: 'map', resource_id: m.id }))}
+          onClose={() => setShowAddToCampaign(false)}
+          onAdded={() => {
+            setShowAddToCampaign(false)
+            bulk.exit()
+          }}
+        />
+      )}
+
+      {showBulkEdit && (
+        <BulkEditModal
+          type="map"
+          items={selectedMapObjects()}
+          onClose={() => setShowBulkEdit(false)}
+          onSaved={(edited) => {
+            applyMapEdits(edited)
+            setShowBulkEdit(false)
+            bulk.exit()
+          }}
+        />
       )}
     </div>
   )

@@ -1,19 +1,146 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LuUser } from 'react-icons/lu'
 import { mediaUrl } from '../../api'
 import { formatSize } from '../../utils'
 import FavoriteButton from '../FavoriteButton'
+import DownloadButton from '../DownloadButton'
 
-export default function TokenCard({ token, onClick, bulkMode, selected, onToggle }) {
+export default function TokenCard({ token, onClick, bulkMode, selected, onToggle, list }) {
   const { t } = useTranslation()
+  const [hovered, setHovered] = useState(false)
 
   const handleClick = (e) => {
     if (bulkMode) {
       e.stopPropagation()
-      onToggle()
+      onToggle({ shift: e.shiftKey, meta: e.metaKey || e.ctrlKey })
       return
     }
     onClick()
+  }
+
+  if (list) {
+    return (
+      <div
+        onClick={handleClick}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            handleClick(e)
+          }
+        }}
+        role="button"
+        tabIndex={0}
+        aria-label={token.filename}
+        aria-pressed={bulkMode ? selected : undefined}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          padding: '10px 14px',
+          background: selected ? 'var(--bg-card-hover)' : 'var(--bg-card)',
+          border: selected ? '1px solid var(--gold-dim)' : '1px solid var(--border)',
+          borderRadius: 8,
+          cursor: bulkMode ? 'default' : 'pointer',
+          transition: 'border-color 0.15s',
+          position: 'relative',
+        }}
+      >
+        {bulkMode && (
+          <div
+            style={{
+              width: 20,
+              height: 20,
+              flexShrink: 0,
+              borderRadius: 4,
+              background: selected ? 'var(--gold)' : 'transparent',
+              border: selected ? 'none' : '2px solid var(--border-light)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {selected && (
+              <span style={{ fontSize: 11, color: 'var(--bg-deep)', fontWeight: 700 }}>✓</span>
+            )}
+          </div>
+        )}
+        <div
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 4,
+            overflow: 'hidden',
+            flexShrink: 0,
+            background: 'var(--bg-deep)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {token.has_thumbnail ? (
+            <img
+              src={mediaUrl(`/tokens/${token.id}/thumbnail`)}
+              alt=""
+              loading="lazy"
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          ) : (
+            <LuUser
+              size={18}
+              color="var(--text-muted)"
+              aria-hidden="true"
+              style={{ opacity: 0.4 }}
+            />
+          )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 15,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {token.filename}
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              color: 'var(--text-muted)',
+              display: 'flex',
+              gap: 8,
+              marginTop: 2,
+              alignItems: 'center',
+            }}
+          >
+            <span>{formatSize(token.file_size)}</span>
+            {token.is_explicit && <span style={{ color: '#e07070' }}>{t('tokens.explicit')}</span>}
+            {token.is_missing && <span style={{ color: '#c8860a' }}>{t('tokens.missing')}</span>}
+          </div>
+        </div>
+        {!bulkMode && (
+          <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <DownloadButton
+              type="tokens"
+              id={token.id}
+              style={{ position: 'static', background: 'transparent', width: 28, height: 28 }}
+            />
+            <FavoriteButton
+              type="token"
+              id={token.id}
+              style={{
+                position: 'static',
+                background: 'transparent',
+                width: 28,
+                height: 28,
+              }}
+            />
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -39,13 +166,16 @@ export default function TokenCard({ token, onClick, bulkMode, selected, onToggle
         position: 'relative',
       }}
       onMouseEnter={(e) => {
+        setHovered(true)
         if (!bulkMode && !selected) e.currentTarget.style.borderColor = 'var(--border-light)'
       }}
       onMouseLeave={(e) => {
+        setHovered(false)
         if (!selected) e.currentTarget.style.borderColor = 'var(--border)'
       }}
     >
-      {!bulkMode && <FavoriteButton type="token" id={token.id} />}
+      {!bulkMode && <DownloadButton type="tokens" id={token.id} cardHovered={hovered} />}
+      {!bulkMode && <FavoriteButton type="token" id={token.id} cardHovered={hovered} />}
       {bulkMode && (
         <div
           style={{

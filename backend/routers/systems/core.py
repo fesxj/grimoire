@@ -4,6 +4,7 @@ from fastapi import Depends, HTTPException
 from ...auth import CurrentUser, get_current_user, require_gm_or_admin
 from ...config import SessionLocal
 from ...models import Book, BookFolder, GameSystem, User
+from ._helpers import resolve_cover_book_id
 from ._schemas import BookFolderUpdate, GameSystemUpdate
 
 
@@ -24,23 +25,7 @@ def list_systems(current_user: CurrentUser = Depends(get_current_user)):
             if not can_see_explicit:
                 book_q = book_q.filter(Book.is_explicit != True)
             book_count = book_q.count()
-            cover_book_id = s.cover_book_id
-            if not cover_book_id:
-                auto = (
-                    db.query(Book)
-                    .filter_by(game_system_id=s.id, category="core", has_thumbnail=True)
-                    .order_by(Book.title)
-                    .first()
-                )
-                if not auto:
-                    auto = (
-                        db.query(Book)
-                        .filter_by(game_system_id=s.id, has_thumbnail=True)
-                        .order_by(Book.title)
-                        .first()
-                    )
-                if auto:
-                    cover_book_id = auto.id
+            cover_book_id = resolve_cover_book_id(db, s)
             result.append(
                 {
                     "id": s.id,

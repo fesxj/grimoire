@@ -15,13 +15,20 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...actual, useNavigate: () => vi.fn() }
 })
 
+let mockUserPrefs = { cardSize: 'comfortable', librarySort: 'az' }
 vi.mock('../hooks/useUserPrefs', () => ({
-  getUserPrefs: () => ({ cardSize: 'comfortable', librarySort: 'az' }),
+  getUserPrefs: () => mockUserPrefs,
+  saveUserPref: (key, value) => {
+    mockUserPrefs = { ...mockUserPrefs, [key]: value }
+  },
 }))
 
+let mockRecentBooks = []
+const mockRemoveRecentBook = vi.fn()
 vi.mock('../hooks/useBookPrefs', () => ({
-  getRecentBooks: () => [],
+  getRecentBooks: () => mockRecentBooks,
   getBookPrefs: () => ({}),
+  removeRecentBook: (id) => mockRemoveRecentBook(id),
 }))
 
 // Favorites context — default: nothing is a favorite
@@ -31,7 +38,7 @@ vi.mock('../context/FavoritesContext', () => ({
 }))
 
 vi.mock('../components/FavoriteButton', () => ({
-  default: () => null,
+  default: ({ type, id }) => <button data-testid={`fav-${type}-${id}`}>fav</button>,
 }))
 
 function makeSystem(overrides = {}) {
@@ -63,6 +70,9 @@ describe('LibraryView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockIsFavorite.mockReturnValue(false)
+    sessionStorage.clear()
+    mockUserPrefs = { cardSize: 'comfortable', librarySort: 'az' }
+    mockRecentBooks = []
   })
 
   it('renders system cards after loading', async () => {
@@ -117,6 +127,54 @@ describe('LibraryView', () => {
     expect(screen.getByText('Other System')).toBeInTheDocument()
   })
 
+  it('view-mode toggle cycles card → compact → list → card', async () => {
+    sessionStorage.clear()
+    api.get.mockResolvedValue([makeSystem()])
+    renderView()
+    await waitFor(() => expect(screen.getByText('Test System')).toBeInTheDocument())
+
+    // Starts on Cards (the persisted default from the mocked prefs). The toggle
+    // is icon-only; the current mode is exposed via its accessible name.
+    const toggle = screen.getByRole('button', { name: /change view/i })
+    expect(toggle).toHaveAccessibleName(/cards/i)
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAccessibleName(/compact/i)
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAccessibleName(/list/i)
+    // The system still renders in list mode.
+    expect(screen.getByText('Test System')).toBeInTheDocument()
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAccessibleName(/cards/i)
+  })
+
+  it('renders the favorite button on system cards in compact mode', async () => {
+    sessionStorage.clear()
+    api.get.mockResolvedValue([makeSystem({ id: 'sys-1', name: 'Test System' })])
+    renderView()
+    await waitFor(() => expect(screen.getByText('Test System')).toBeInTheDocument())
+
+    // Switch to compact mode.
+    await userEvent.click(screen.getByRole('button', { name: /change view/i }))
+
+    expect(screen.getByTestId('fav-system-sys-1')).toBeInTheDocument()
+  })
+
+  it('view-mode override is stored in sessionStorage, not user prefs', async () => {
+    sessionStorage.clear()
+    api.get.mockResolvedValue([makeSystem()])
+    renderView()
+    await waitFor(() => expect(screen.getByText('Test System')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: /change view/i }))
+
+    expect(sessionStorage.getItem('grimoire:view-mode:system')).toBe('compact')
+    // The persisted user-prefs store is never written by the toggle.
+    expect(localStorage.getItem('grimoire:user-prefs')).toBeNull()
+  })
+
   it('shows empty hint when favorites filter is on but nothing is favorited', async () => {
     api.get.mockResolvedValue([makeSystem({ name: 'Unfavorited System' })])
     mockIsFavorite.mockReturnValue(false)
@@ -128,5 +186,51 @@ describe('LibraryView', () => {
 
     expect(screen.queryByText('Unfavorited System')).not.toBeInTheDocument()
     expect(screen.getByText(/no favorites here yet/i)).toBeInTheDocument()
+  })
+
+  describe('recently opened', () => {
+    beforeEach(() => {
+      mockRecentBooks = [{ id: 'b1', title: 'Recent Book', has_thumbnail: false, page_count: 10 }]
+    })
+
+    it('always shows the remove button for recent books', async () => {
+      api.get.mockResolvedValue([makeSystem()])
+      renderView()
+      await waitFor(() => expect(screen.getByText('Recent Book')).toBeInTheDocument())
+
+      const removeBtn = screen.getByRole('button', { name: /remove from recently opened/i })
+      // Always visible — not gated behind hover (no opacity:0).
+      expect(removeBtn).toBeInTheDocument()
+      expect(removeBtn.style.opacity).not.toBe('0')
+
+      await userEvent.click(removeBtn)
+      expect(mockRemoveRecentBook).toHaveBeenCalledWith('b1')
+    })
+
+    it('collapses and expands the recently opened section', async () => {
+      api.get.mockResolvedValue([makeSystem()])
+      renderView()
+      await waitFor(() => expect(screen.getByText('Recent Book')).toBeInTheDocument())
+
+      const header = screen.getByRole('button', { name: /^recently opened$/i })
+      expect(header).toHaveAttribute('aria-expanded', 'true')
+
+      await userEvent.click(header)
+      expect(header).toHaveAttribute('aria-expanded', 'false')
+      expect(mockUserPrefs.recentCollapsed).toBe(true)
+    })
+
+    it('starts collapsed when the pref is set', async () => {
+      mockUserPrefs = { ...mockUserPrefs, recentCollapsed: true }
+      api.get.mockResolvedValue([makeSystem()])
+      renderView()
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /^recently opened$/i })).toBeInTheDocument()
+      )
+      expect(screen.getByRole('button', { name: /^recently opened$/i })).toHaveAttribute(
+        'aria-expanded',
+        'false'
+      )
+    })
   })
 })

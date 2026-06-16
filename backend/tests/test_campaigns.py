@@ -401,6 +401,55 @@ class TestResources:
         )
         assert resp.status_code == 400
 
+    def test_bulk_add_links_many_and_skips_duplicates(self, client, gm_headers, gm_id):
+        sys = make_game_system()
+        b1 = make_book(system_id=sys.id)
+        b2 = make_book(system_id=sys.id)
+        m1 = make_map()
+        campaign = client.post(
+            "/api/campaigns",
+            json={"name": f"Bulk {uid()}", "is_gm_campaign": True},
+            headers=gm_headers,
+        ).json()
+        # Pre-link one book so we can confirm it is skipped in the batch.
+        client.post(
+            f"/api/campaigns/{campaign['id']}/resources",
+            json={"resource_type": "book", "resource_id": b1.id},
+            headers=gm_headers,
+        )
+
+        resp = client.post(
+            f"/api/campaigns/{campaign['id']}/resources/bulk",
+            json={
+                "resources": [
+                    {"resource_type": "book", "resource_id": b1.id},  # duplicate
+                    {"resource_type": "book", "resource_id": b2.id, "visibility": "public"},
+                    {"resource_type": "map", "resource_id": m1.id, "visibility": "gm"},
+                ]
+            },
+            headers=gm_headers,
+        )
+        assert resp.status_code == 201
+        created = resp.json()
+        # Only the two new resources are created; the duplicate is silently skipped.
+        assert len(created) == 2
+        ids = {r["resource_id"] for r in created}
+        assert ids == {b2.id, m1.id}
+
+        # Campaign now has all three linked.
+        listed = client.get(
+            f"/api/campaigns/{campaign['id']}/resources", headers=gm_headers
+        ).json()
+        assert len(listed) == 3
+
+    def test_bulk_add_requires_manage(self, client, player_headers, gm_campaign):
+        resp = client.post(
+            f"/api/campaigns/{gm_campaign['id']}/resources/bulk",
+            json={"resources": [{"resource_type": "book", "resource_id": "x"}]},
+            headers=player_headers,
+        )
+        assert resp.status_code in (403, 404)
+
     def test_gm_can_remove_resource(self, client, gm_headers, campaign_with_book):
         campaign, book = campaign_with_book
         resources = client.get(
@@ -413,6 +462,61 @@ class TestResources:
             ).status_code
             == 204
         )
+
+
+# ---------------------------------------------------------------------------
+# Resource search (the picker)
+# ---------------------------------------------------------------------------
+
+
+class TestResourceSearch:
+    def test_system_filter_narrows_books(self, client, gm_headers):
+        sys_a = make_game_system()
+        sys_b = make_game_system()
+        token = f"srch{uid()}"
+        make_book(system_id=sys_a.id, title=f"{token} Alpha")
+        make_book(system_id=sys_b.id, title=f"{token} Beta")
+
+        resp = client.get(
+            f"/api/campaigns/resources/search?q={token}&resource_type=book"
+            f"&system_id={sys_a.id}",
+            headers=gm_headers,
+        )
+        assert resp.status_code == 200
+        names = [r["name"] for r in resp.json()]
+        assert any("Alpha" in n for n in names)
+        assert not any("Beta" in n for n in names)
+
+    def test_folder_name_query_returns_maps_in_folder(self, client, gm_headers):
+        folder = f"Abyssal Fall ({uid()})"
+        make_map(filename="battle.png", relative_path=f"Maps/{folder}/battle.png")
+        make_map(filename="overview.png", relative_path=f"Maps/{folder}/overview.png")
+
+        resp = client.get(
+            f"/api/campaigns/resources/search?q={folder}&resource_type=map",
+            headers=gm_headers,
+        )
+        assert resp.status_code == 200
+        results = resp.json()
+        # Both maps in the folder match by folder path even though their
+        # filenames don't contain the query.
+        names = {r["name"] for r in results}
+        assert {"battle.png", "overview.png"} <= names
+        # Folder path is carried in the subtitle for context.
+        assert all(folder in r["subtitle"] for r in results if r["name"] in names)
+
+    def test_folder_matches_rank_above_filename(self, client, gm_headers):
+        term = f"market{uid()}"
+        # One map whose folder matches, one whose filename matches.
+        make_map(filename="plain.png", relative_path=f"Maps/{term} Square/plain.png")
+        make_map(filename=f"{term}-stall.png", relative_path="Maps/Other/stall.png")
+
+        resp = client.get(
+            f"/api/campaigns/resources/search?q={term}&resource_type=map",
+            headers=gm_headers,
+        )
+        results = resp.json()
+        assert results[0]["name"] == "plain.png"  # folder hit ranked first
 
 
 # ---------------------------------------------------------------------------
@@ -951,6 +1055,164 @@ class TestCharacterUploads:
 
 
 # ---------------------------------------------------------------------------
+# In-app character sheets: AcroForm fields + duplicate from a template
+# ---------------------------------------------------------------------------
+
+
+def _form_pdf_bytes():
+    """A one-page PDF with a single fillable text field named 'name'."""
+    import fitz
+
+    doc = fitz.open()
+    page = doc.new_page()
+    w = fitz.Widget()
+    w.field_name = "name"
+    w.field_type = fitz.PDF_WIDGET_TYPE_TEXT
+    w.rect = fitz.Rect(50, 50, 250, 70)
+    w.field_value = ""
+    page.add_widget(w)
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
+class TestCharacterSheetInApp:
+    @pytest.fixture()
+    def member(self, client, gm_headers, player_headers, player_id):
+        c = client.post(
+            "/api/campaigns",
+            json={"name": f"Sheet {uid()}", "is_gm_campaign": True},
+            headers=gm_headers,
+        ).json()
+        client.post(
+            f"/api/campaigns/{c['id']}/invite",
+            json={"user_id": player_id},
+            headers=gm_headers,
+        )
+        client.patch(
+            f"/api/campaigns/{c['id']}/members/{player_id}",
+            json={"status": "accepted"},
+            headers=player_headers,
+        )
+        body = client.get(f"/api/campaigns/{c['id']}", headers=gm_headers).json()
+        member_id = next(m["id"] for m in body["members"] if not m.get("is_owner"))
+        return c, member_id
+
+    def _upload_form_sheet(self, client, headers, c, member_id):
+        return client.post(
+            f"/api/campaigns/{c['id']}/members/{member_id}/sheet",
+            files={"file": ("hero.pdf", _form_pdf_bytes(), "application/pdf")},
+            headers=headers,
+        )
+
+    def test_fields_reports_fillable_and_lists_widgets(self, client, player_headers, member):
+        c, member_id = member
+        assert self._upload_form_sheet(client, player_headers, c, member_id).status_code == 200
+        resp = client.get(
+            f"/api/campaigns/{c['id']}/members/{member_id}/sheet/fields", headers=player_headers
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["fillable"] is True
+        assert [f["name"] for f in body["fields"]] == ["name"]
+        assert body["fields"][0]["type"] == "text"
+
+    def test_save_fields_persists_value(self, client, player_headers, member):
+        c, member_id = member
+        self._upload_form_sheet(client, player_headers, c, member_id)
+        resp = client.put(
+            f"/api/campaigns/{c['id']}/members/{member_id}/sheet/fields",
+            json={"fields": {"name": "Aragorn"}},
+            headers=player_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        # Re-read to confirm persistence.
+        again = client.get(
+            f"/api/campaigns/{c['id']}/members/{member_id}/sheet/fields", headers=player_headers
+        ).json()
+        assert again["fields"][0]["value"] == "Aragorn"
+
+    def test_fields_not_fillable_for_image_sheet(self, client, player_headers, member):
+        c, member_id = member
+        client.post(
+            f"/api/campaigns/{c['id']}/members/{member_id}/sheet",
+            files={"file": ("sheet.png", _png_bytes(), "image/png")},
+            headers=player_headers,
+        )
+        resp = client.get(
+            f"/api/campaigns/{c['id']}/members/{member_id}/sheet/fields", headers=player_headers
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"fillable": False, "fields": []}
+
+    def test_unrelated_user_cannot_edit_fields(self, client, player_headers, admin_headers, member):
+        c, member_id = member
+        self._upload_form_sheet(client, player_headers, c, member_id)
+        resp = client.get(
+            f"/api/campaigns/{c['id']}/members/{member_id}/sheet/fields", headers=admin_headers
+        )
+        assert resp.status_code == 403
+
+    def test_duplicate_from_campaign_file(self, client, gm_headers, player_headers, member):
+        c, member_id = member
+        # GM uploads a form-fillable PDF as a campaign file.
+        up = client.post(
+            f"/api/campaigns/{c['id']}/files",
+            files={"file": ("blank.pdf", _form_pdf_bytes(), "application/pdf")},
+            headers=gm_headers,
+        )
+        assert up.status_code == 201, up.text
+        file_id = up.json()["resource_id"]
+
+        resp = client.post(
+            f"/api/campaigns/{c['id']}/members/{member_id}/sheet/duplicate",
+            json={"source_type": "file", "source_id": file_id},
+            headers=player_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["character_sheet_filename"] == "blank.pdf"
+        fields = client.get(
+            f"/api/campaigns/{c['id']}/members/{member_id}/sheet/fields", headers=player_headers
+        ).json()
+        assert fields["fillable"] is True
+
+    def test_duplicate_from_library_book(self, client, player_headers, member):
+        c, member_id = member
+        sys = make_game_system()
+        book = make_book(system_id=sys.id, category="character-sheet", title="Blank Sheet")
+        with open(book.filepath, "wb") as f:
+            f.write(_form_pdf_bytes())
+        try:
+            resp = client.post(
+                f"/api/campaigns/{c['id']}/members/{member_id}/sheet/duplicate",
+                json={"source_type": "book", "source_id": book.id},
+                headers=player_headers,
+            )
+            assert resp.status_code == 200, resp.text
+        finally:
+            import os
+
+            os.path.isfile(book.filepath) and os.unlink(book.filepath)
+
+    def test_sheet_sources_lists_library_and_campaign_pdfs(
+        self, client, gm_headers, player_headers, member
+    ):
+        c, member_id = member
+        sys = make_game_system()
+        make_book(system_id=sys.id, category="character-sheet", title="A Blank Sheet")
+        client.post(
+            f"/api/campaigns/{c['id']}/files",
+            files={"file": ("camp.pdf", b"%PDF-1.4 x", "application/pdf")},
+            headers=gm_headers,
+        )
+        resp = client.get(f"/api/campaigns/{c['id']}/sheet-sources", headers=player_headers)
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert any(b["name"] == "A Blank Sheet" for b in body["books"])
+        assert any(f["name"] == "camp.pdf" for f in body["files"])
+
+
+# ---------------------------------------------------------------------------
 # Create wizard: explicit resources, gm_only visibility, suggested resources
 # ---------------------------------------------------------------------------
 
@@ -1131,20 +1393,18 @@ class TestCategories:
 
     def test_create_and_list_by_kind(self, client, gm_headers, campaign):
         cid = campaign["id"]
-        client.post(
+        # Note categories are retired (pages nest instead); only resource exists.
+        rejected = client.post(
             f"/api/campaigns/{cid}/categories",
             json={"name": "NPCs", "kind": "note"},
             headers=gm_headers,
         )
+        assert rejected.status_code == 400
         client.post(
             f"/api/campaigns/{cid}/categories",
             json={"name": "Handouts", "kind": "resource"},
             headers=gm_headers,
         )
-        notes = client.get(
-            f"/api/campaigns/{cid}/categories?kind=note", headers=gm_headers
-        ).json()
-        assert [c["name"] for c in notes] == ["NPCs"]
         resources = client.get(
             f"/api/campaigns/{cid}/categories?kind=resource", headers=gm_headers
         ).json()
@@ -1153,7 +1413,7 @@ class TestCategories:
     def test_non_owner_cannot_create(self, client, player_headers, campaign):
         resp = client.post(
             f"/api/campaigns/{campaign['id']}/categories",
-            json={"name": "Nope", "kind": "note"},
+            json={"name": "Nope", "kind": "resource"},
             headers=player_headers,
         )
         assert resp.status_code == 403
@@ -1162,7 +1422,7 @@ class TestCategories:
         cid = campaign["id"]
         cat = client.post(
             f"/api/campaigns/{cid}/categories",
-            json={"name": "Old", "kind": "note"},
+            json={"name": "Old", "kind": "resource"},
             headers=gm_headers,
         ).json()
         resp = client.patch(
@@ -1177,7 +1437,7 @@ class TestCategories:
         cid = campaign["id"]
         cat = client.post(
             f"/api/campaigns/{cid}/categories",
-            json={"name": "NPCs", "kind": "note", "icon": "user"},
+            json={"name": "NPCs", "kind": "resource", "icon": "user"},
             headers=gm_headers,
         ).json()
         assert cat["icon"] == "user"
@@ -1199,10 +1459,10 @@ class TestCategories:
     def test_reorder(self, client, gm_headers, campaign):
         cid = campaign["id"]
         a = client.post(
-            f"/api/campaigns/{cid}/categories", json={"name": "A", "kind": "note"}, headers=gm_headers
+            f"/api/campaigns/{cid}/categories", json={"name": "A", "kind": "resource"}, headers=gm_headers
         ).json()
         b = client.post(
-            f"/api/campaigns/{cid}/categories", json={"name": "B", "kind": "note"}, headers=gm_headers
+            f"/api/campaigns/{cid}/categories", json={"name": "B", "kind": "resource"}, headers=gm_headers
         ).json()
         # Reverse the order.
         client.put(
@@ -1211,7 +1471,7 @@ class TestCategories:
             headers=gm_headers,
         )
         ordered = client.get(
-            f"/api/campaigns/{cid}/categories?kind=note", headers=gm_headers
+            f"/api/campaigns/{cid}/categories?kind=resource", headers=gm_headers
         ).json()
         assert [c["name"] for c in ordered] == ["B", "A"]
 
@@ -1245,76 +1505,6 @@ class TestCategories:
             headers=gm_headers,
         )
         assert cleared.json()["category_id"] is None
-
-    def test_assign_note_to_category(self, client, gm_headers, campaign):
-        cid = campaign["id"]
-        cat = client.post(
-            f"/api/campaigns/{cid}/categories",
-            json={"name": "NPCs", "kind": "note"},
-            headers=gm_headers,
-        ).json()
-        page = client.post(
-            f"/api/campaigns/{cid}/wiki",
-            json={"title": "Gandalf", "category_id": cat["id"]},
-            headers=gm_headers,
-        ).json()
-        assert page["category_id"] == cat["id"]
-
-    def test_wrong_kind_rejected(self, client, gm_headers, campaign):
-        cid = campaign["id"]
-        # A resource category can't be used for a note page.
-        rcat = client.post(
-            f"/api/campaigns/{cid}/categories",
-            json={"name": "Handouts", "kind": "resource"},
-            headers=gm_headers,
-        ).json()
-        resp = client.post(
-            f"/api/campaigns/{cid}/wiki",
-            json={"title": "X", "category_id": rcat["id"]},
-            headers=gm_headers,
-        )
-        assert resp.status_code == 400
-
-    def test_delete_uncategorize_keeps_items(self, client, gm_headers, campaign):
-        cid = campaign["id"]
-        cat = client.post(
-            f"/api/campaigns/{cid}/categories",
-            json={"name": "NPCs", "kind": "note"},
-            headers=gm_headers,
-        ).json()
-        page = client.post(
-            f"/api/campaigns/{cid}/wiki",
-            json={"title": "Villain", "category_id": cat["id"]},
-            headers=gm_headers,
-        ).json()
-        resp = client.delete(
-            f"/api/campaigns/{cid}/categories/{cat['id']}?mode=uncategorize", headers=gm_headers
-        )
-        assert resp.status_code == 204
-        # Page survives, now uncategorized.
-        got = client.get(f"/api/campaigns/{cid}/wiki/{page['id']}", headers=gm_headers).json()
-        assert got["category_id"] is None
-
-    def test_delete_with_items_removes_pages(self, client, gm_headers, campaign):
-        cid = campaign["id"]
-        cat = client.post(
-            f"/api/campaigns/{cid}/categories",
-            json={"name": "Doomed", "kind": "note"},
-            headers=gm_headers,
-        ).json()
-        page = client.post(
-            f"/api/campaigns/{cid}/wiki",
-            json={"title": "Goner", "category_id": cat["id"]},
-            headers=gm_headers,
-        ).json()
-        resp = client.delete(
-            f"/api/campaigns/{cid}/categories/{cat['id']}?mode=delete_items", headers=gm_headers
-        )
-        assert resp.status_code == 204
-        assert (
-            client.get(f"/api/campaigns/{cid}/wiki/{page['id']}", headers=gm_headers).status_code
-            == 404
-        )
 
     def test_delete_resource_category_unlinks_items(self, client, gm_headers, campaign):
         cid = campaign["id"]

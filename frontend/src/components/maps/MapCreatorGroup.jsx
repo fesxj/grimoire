@@ -58,6 +58,7 @@ export default function MapFolderGroup({
   onToggleMap,
   onToggleFolder,
   cardSize = 'comfortable',
+  list = false,
   canTag = true,
   onDownload,
 }) {
@@ -447,13 +448,17 @@ export default function MapFolderGroup({
                 )}
 
                 {!isSubCollapsed && (
-                  <LazyGrid count={subMaps.length} cardSize={cardSize}>
+                  <LazyGrid count={subMaps.length} cardSize={cardSize} list={list}>
                     <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: `repeat(auto-fill, minmax(${cardSize === 'compact' ? '140px' : '200px'}, 1fr))`,
-                        gap: 16,
-                      }}
+                      style={
+                        list
+                          ? { display: 'flex', flexDirection: 'column', gap: 8 }
+                          : {
+                              display: 'grid',
+                              gridTemplateColumns: `repeat(auto-fill, minmax(${cardSize === 'compact' ? '140px' : '200px'}, 1fr))`,
+                              gap: 16,
+                            }
+                      }
                     >
                       {subMaps.map((m) => (
                         <MapCard
@@ -462,7 +467,8 @@ export default function MapFolderGroup({
                           onClick={() => onSelectMap(m.id)}
                           bulkMode={bulkMode}
                           selected={selectedMapIds?.has(m.id)}
-                          onToggle={() => onToggleMap(m.id)}
+                          onToggle={(mods) => onToggleMap(m.id, mods)}
+                          list={list}
                         />
                       ))}
                     </div>

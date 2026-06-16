@@ -29,7 +29,13 @@ function makeBookResult(overrides = {}) {
 }
 
 function makeResponse(books = [], maps = [], tokens = []) {
-  return { query: 'fireball', total: books.length + maps.length + tokens.length, results: books, maps, tokens }
+  return {
+    query: 'fireball',
+    total: books.length + maps.length + tokens.length,
+    results: books,
+    maps,
+    tokens,
+  }
 }
 
 function renderView() {
@@ -84,7 +90,12 @@ describe('SearchView', () => {
   it('book groups start expanded and clicking collapses then re-expands page snippets', async () => {
     api.get.mockResolvedValue(
       makeResponse([
-        makeBookResult({ id: 'b1', title: 'Spell Guide', page_number: 7, snippet: 'fireball text' }),
+        makeBookResult({
+          id: 'b1',
+          title: 'Spell Guide',
+          page_number: 7,
+          snippet: 'fireball text',
+        }),
       ])
     )
     renderView()
@@ -105,7 +116,12 @@ describe('SearchView', () => {
     api.get.mockResolvedValue(
       makeResponse([
         makeBookResult({ id: 'b1', title: 'PHB', game_system: 'D&D 5e', game_system_id: 'sys-1' }),
-        makeBookResult({ id: 'b2', title: 'Core Rules', game_system: 'Pathfinder', game_system_id: 'sys-2' }),
+        makeBookResult({
+          id: 'b2',
+          title: 'Core Rules',
+          game_system: 'Pathfinder',
+          game_system_id: 'sys-2',
+        }),
       ])
     )
     renderView()
@@ -133,7 +149,12 @@ describe('SearchView', () => {
     api.get.mockResolvedValue(
       makeResponse([
         makeBookResult({ id: 'b1', title: 'PHB', game_system: 'D&D 5e', game_system_id: 'sys-1' }),
-        makeBookResult({ id: 'b2', title: 'Core Rules', game_system: 'Pathfinder', game_system_id: 'sys-2' }),
+        makeBookResult({
+          id: 'b2',
+          title: 'Core Rules',
+          game_system: 'Pathfinder',
+          game_system_id: 'sys-2',
+        }),
       ])
     )
     renderView()
@@ -149,9 +170,7 @@ describe('SearchView', () => {
   })
 
   it('shows the sort control when there are book results', async () => {
-    api.get.mockResolvedValue(
-      makeResponse([makeBookResult({ id: 'b1', title: 'Alpha Book' })])
-    )
+    api.get.mockResolvedValue(makeResponse([makeBookResult({ id: 'b1', title: 'Alpha Book' })]))
     renderView()
     await userEvent.type(screen.getByRole('textbox'), 'fi')
 
@@ -188,7 +207,10 @@ describe('SearchView', () => {
 
   it('shows map results in a separate section', async () => {
     api.get.mockResolvedValue(
-      makeResponse([], [{ id: 'm1', filename: 'dungeon.png', relative_path: 'maps/dungeon.png', tags: [] }])
+      makeResponse(
+        [],
+        [{ id: 'm1', filename: 'dungeon.png', relative_path: 'maps/dungeon.png', tags: [] }]
+      )
     )
     renderView()
     await userEvent.type(screen.getByRole('textbox'), 'du')
@@ -200,7 +222,11 @@ describe('SearchView', () => {
 
   it('shows token results in a separate section', async () => {
     api.get.mockResolvedValue(
-      makeResponse([], [], [{ id: 't1', filename: 'goblin.png', relative_path: 'tokens/goblin.png', tags: [] }])
+      makeResponse(
+        [],
+        [],
+        [{ id: 't1', filename: 'goblin.png', relative_path: 'tokens/goblin.png', tags: [] }]
+      )
     )
     renderView()
     await userEvent.type(screen.getByRole('textbox'), 'go')

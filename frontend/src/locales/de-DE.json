@@ -80,7 +80,8 @@
     "sizeMB": "{{size}} MB",
     "sizeGB": "{{size}} GB",
     "addToFavorites": "Zu Favoriten hinzufügen",
-    "removeFromFavorites": "Aus Favoriten entfernen"
+    "removeFromFavorites": "Aus Favoriten entfernen",
+    "select": "Auswählen"
   },
   "login": {
     "username": "Benutzername",
@@ -112,7 +113,14 @@
     "bookCount_one": "{{count}} Buch",
     "bookCount_other": "{{count}} Bücher",
     "agnosticTitle": "Systemunabhängig",
-    "agnosticSubtitle": "Referenzmaterial, Zines und Bücher, die keinem bestimmten Spielsystem zugeordnet sind."
+    "agnosticSubtitle": "Referenzmaterial, Zines und Bücher, die keinem bestimmten Spielsystem zugeordnet sind.",
+    "viewMode": {
+      "card": "Karten",
+      "compact": "Kompakt",
+      "list": "Liste",
+      "toggle": "Ansicht ändern",
+      "toggleWithMode": "Ansicht ändern (aktuell {{mode}})"
+    }
   },
   "systemDetail": {
     "backToLibrary": "Zurück zur Bibliothek",
@@ -358,9 +366,13 @@
       "title": "Bibliotheksansicht",
       "description": "Anzeigeeinstellungen für Bibliothek, Karten und Tokens.",
       "sortOrder": "Sortierreihenfolge",
-      "cardSize": "Kartengröße",
-      "comfortable": "Komfortabel",
-      "compact": "Kompakt"
+      "viewMode": "Standardansicht",
+      "viewModeSystems": "Systeme",
+      "viewModeBooks": "Bücher",
+      "viewModeMaps": "Karten",
+      "viewModeTokens": "Tokens",
+      "recentLimit": "Zuletzt geöffnete Bücher",
+      "recentLimitHint": "Wie viele zuletzt geöffnete Bücher gemerkt werden (0–{{max}}). Auf 0 setzen, um den Bereich auszublenden."
     },
     "language": {
       "title": "Sprache",
@@ -625,6 +637,8 @@
     "descriptionPlaceholder": "Eine kurze Beschreibung dieser Kampagne...",
     "systemLabel": "Spielsystem",
     "systemNone": "— Keines —",
+    "systemGroupFavorites": "Favoriten",
+    "systemGroupAll": "Alle Systeme",
     "gmTitleLabel": "Dein Titel",
     "gmTitlePlaceholder": "Dungeon Master, Spielleiter, Navigator...",
     "gmTitleHint": "Wie Spieler deine Rolle sehen (z. B. Dungeon Master, Hüter, Wächter)",
@@ -647,7 +661,13 @@
       "visibilityLabel": null,
       "visShared": null,
       "visGm": null,
-      "visPrivate": null
+      "visPrivate": null,
+      "type_all": "Alle",
+      "type_book": "Bücher",
+      "type_map": "Karten",
+      "type_token": "Marken",
+      "systemFilterLabel": "Nach Spielsystem filtern",
+      "systemFilterAll": "Alle Systeme"
     },
     "bannerLabel": null,
     "bannerChoose": null,
@@ -676,7 +696,20 @@
     "removeSheet": null,
     "characterSheetLink": null,
     "linkSheet": null,
-    "sheetUrlPlaceholder": null
+    "sheetUrlPlaceholder": null,
+    "editSheetInApp": "In der App bearbeiten",
+    "editSheetTitle": "Charakterbogen bearbeiten",
+    "sheetNotFillable": "Diese PDF hat keine ausfüllbaren Formularfelder und kann daher nur heruntergeladen, extern bearbeitet und erneut hochgeladen werden.",
+    "saving": "Wird gespeichert…",
+    "createFromTemplate": "Aus Vorlage erstellen",
+    "chooseTemplate": "Vorlage auswählen",
+    "librarySheets": "Bibliothek",
+    "campaignSheets": "Kampagnendateien",
+    "noTemplates": "Es sind keine ausfüllbaren Bögen verfügbar. Füge der Bibliothekskategorie „Charakterbögen“ eine PDF hinzu oder lade eine in diese Kampagne hoch.",
+    "replaceSheet": "Bogen ersetzen",
+    "replaceSheetWarning": "Das Hochladen eines neuen Bogens ersetzt den aktuellen. Die vorherige Version kann nicht wiederhergestellt werden.",
+    "downloadCurrent": "Aktuellen herunterladen",
+    "replace": "Ersetzen"
   },
   "sessions": {
     "title": "Sitzungsnotizen",
@@ -979,7 +1012,18 @@
     "uncategorized": null,
     "groupLabel": null,
     "emptyGroup": null,
-    "iconLabel": null
+    "iconLabel": null,
+    "export": null,
+    "exportMd": null,
+    "exportJson": null,
+    "import": null,
+    "importTitle": null,
+    "importHint": null,
+    "importFormats": null,
+    "chooseFile": null,
+    "importing": null,
+    "imported": null,
+    "imported_other": null
   },
   "campaignNotes": {
     "backToOverview": null
@@ -1001,5 +1045,38 @@
   "iconPicker": {
     "label": null,
     "none": null
+  },
+  "bulk": {
+    "hint": "Klicke auf Elemente oder Ordner, um sie auszuwählen. Umschalt-Klick für einen Bereich, ⌘/Strg-Klick zum Umschalten.",
+    "tagsPlaceholder": "Hinzuzufügende Schlagwörter, durch Komma getrennt…",
+    "addTags": "Schlagwörter hinzufügen",
+    "applying": "Wird angewendet…",
+    "addToCampaign": "Zur Kampagne hinzufügen",
+    "edit": "Sammelbearbeitung"
+  },
+  "addToCampaign": {
+    "intro_one": "Füge 1 Element zu einer von dir geleiteten Kampagne hinzu.",
+    "intro_other": "Füge {{count}} Elemente zu einer von dir geleiteten Kampagne hinzu.",
+    "campaignLabel": "Kampagne",
+    "add": "Hinzufügen",
+    "noCampaigns": "Du leitest keine Kampagnen, denen du Ressourcen hinzufügen kannst."
+  },
+  "bulkEdit": {
+    "title_one": "1 Element bearbeiten",
+    "title_other": "{{count}} Elemente bearbeiten",
+    "position": "{{current}} von {{total}}",
+    "saveAll": "Alle speichern",
+    "tagsPlaceholder": "Schlagwörter, durch Komma getrennt",
+    "field_title": "Titel",
+    "field_category": "Kategorie",
+    "field_description": "Beschreibung",
+    "field_publisher": "Verlag",
+    "field_year": "Jahr",
+    "field_tags": "Schlagwörter",
+    "field_mapType": "Kartentyp",
+    "field_gridSize": "Rastergröße",
+    "field_explicit": "Explizite Inhalte",
+    "previous": "Zurück",
+    "next": "Weiter"
   }
 }

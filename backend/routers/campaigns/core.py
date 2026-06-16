@@ -228,24 +228,38 @@ def delete_campaign(campaign_id: str, current_user: CurrentUser = Depends(get_cu
         db.close()
 
 
+def _resource_folder(relative_path: str) -> str:
+    """Parent folder path of a media file, dropping the leading top-level dir and
+    the filename — matches the frontend's MapsView.getFolderPath logic."""
+    parts = (relative_path or "").replace("\\", "/").split("/")
+    return "/".join(parts[1:-1])
+
+
 def search_resources_global(
     q: str = "",
     resource_type: str = None,
+    system_id: str = None,
     limit: int = 30,
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    """Full-text search across books, maps, and tokens for the resource picker."""
+    """Search across books, maps, and tokens for the resource picker.
+
+    Books match on title and can be narrowed by game system. Maps and tokens
+    match on their folder path *first*, then filename, so a folder name like
+    "Abyssal Fall (30x49)" surfaces every map inside it. Folder-path matches are
+    ranked above filename-only matches.
+    """
     db = SessionLocal()
     try:
         results = []
         q_lower = q.lower()
 
-        def _match(name: str) -> bool:
-            return not q or q_lower in name.lower()
-
         if not resource_type or resource_type == "book":
-            for b in db.query(Book).order_by(Book.title).limit(500).all():
-                if _match(b.title):
+            query = db.query(Book)
+            if system_id:
+                query = query.filter(Book.game_system_id == system_id)
+            for b in query.order_by(Book.title).limit(500).all():
+                if not q or q_lower in (b.title or "").lower():
                     results.append(
                         {
                             "resource_type": "book",
@@ -256,31 +270,31 @@ def search_resources_global(
                         }
                     )
 
+        # Maps/tokens: prefer folder-path matches, then filename matches.
+        def _media_results(rtype, model):
+            folder_hits, name_hits = [], []
+            for item in db.query(model).order_by(model.filename).limit(1000).all():
+                folder = _resource_folder(item.relative_path)
+                row = {
+                    "resource_type": rtype,
+                    "resource_id": item.id,
+                    "name": item.filename,
+                    "subtitle": folder,
+                    "has_thumbnail": item.has_thumbnail,
+                }
+                if not q:
+                    name_hits.append(row)
+                elif q_lower in folder.lower():
+                    folder_hits.append(row)
+                elif q_lower in (item.filename or "").lower():
+                    name_hits.append(row)
+            return folder_hits + name_hits
+
         if not resource_type or resource_type == "map":
-            for m in db.query(GenericMap).order_by(GenericMap.filename).limit(500).all():
-                if _match(m.filename):
-                    results.append(
-                        {
-                            "resource_type": "map",
-                            "resource_id": m.id,
-                            "name": m.filename,
-                            "subtitle": m.map_type or "",
-                            "has_thumbnail": m.has_thumbnail,
-                        }
-                    )
+            results.extend(_media_results("map", GenericMap))
 
         if not resource_type or resource_type == "token":
-            for t in db.query(Token).order_by(Token.filename).limit(500).all():
-                if _match(t.filename):
-                    results.append(
-                        {
-                            "resource_type": "token",
-                            "resource_id": t.id,
-                            "name": t.filename,
-                            "subtitle": "",
-                            "has_thumbnail": t.has_thumbnail,
-                        }
-                    )
+            results.extend(_media_results("token", Token))
 
         return results[:limit]
     finally:

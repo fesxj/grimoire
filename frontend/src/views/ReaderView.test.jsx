@@ -201,7 +201,10 @@ describe('ReaderView — spread mode (integration)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setupApiMocks()
-    vi.stubGlobal('requestAnimationFrame', (cb) => { cb(); return 0 })
+    vi.stubGlobal('requestAnimationFrame', (cb) => {
+      cb()
+      return 0
+    })
     vi.stubGlobal('cancelAnimationFrame', () => {})
     localStorage.clear()
   })
@@ -219,7 +222,10 @@ describe('ReaderView — spread mode (integration)', () => {
   })
 
   it('restores spreadOffset from localStorage on mount', async () => {
-    localStorage.setItem('grimoire:book:book-1', JSON.stringify({ mode: 'spread', spreadOffset: 1 }))
+    localStorage.setItem(
+      'grimoire:book:book-1',
+      JSON.stringify({ mode: 'spread', spreadOffset: 1 })
+    )
     renderReader()
     await waitFor(() => screen.getByText('Test Book'))
     expect(screen.getByTitle(/Exclude cover from spread/)).toBeInTheDocument()
@@ -230,7 +236,10 @@ describe('ReaderView — back button navigation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     setupApiMocks()
-    vi.stubGlobal('requestAnimationFrame', (cb) => { cb(); return 0 })
+    vi.stubGlobal('requestAnimationFrame', (cb) => {
+      cb()
+      return 0
+    })
     vi.stubGlobal('cancelAnimationFrame', () => {})
   })
 

@@ -12,16 +12,37 @@ import {
   LuBookOpen,
   LuEye,
   LuArrowLeft,
-  LuFolderCog,
   LuFileText,
+  LuDownload,
+  LuUpload,
+  LuChevronRight,
+  LuChevronDown,
 } from 'react-icons/lu'
 import { campaigns } from '../../api'
 import Spinner from '../Spinner'
 import WikiMarkdown from './WikiMarkdown'
 import GrimoireEmbedPicker from './GrimoireEmbedPicker'
-import CategoryManager from './CategoryManager'
+import WikiImportModal from './WikiImportModal'
 import IconPicker from './IconPicker'
 import { CampaignIcon } from './campaignIcons'
+
+// Return the ids of `pageId` and all its descendants, so a parent picker can
+// exclude them (a page may not nest under itself or its own subtree).
+function descendantIds(pageId, pages) {
+  const childrenOf = {}
+  for (const p of pages) (childrenOf[p.parent_id] ||= []).push(p)
+  const out = new Set([pageId])
+  const stack = [pageId]
+  while (stack.length) {
+    for (const child of childrenOf[stack.pop()] || []) {
+      if (!out.has(child.id)) {
+        out.add(child.id)
+        stack.push(child.id)
+      }
+    }
+  }
+  return out
+}
 
 const VIS_META = {
   gm: { Icon: LuShield, color: 'var(--gold)', key: 'gm' },
@@ -51,18 +72,25 @@ function VisibilityBadge({ visibility }) {
   )
 }
 
-function PageEditor({ campaign, isOwner, page, allPages, categories, onSaved, onCancel }) {
+function PageEditor({ campaign, isOwner, page, allPages, defaultParentId, onSaved, onCancel }) {
   const { t } = useTranslation()
   const isNew = !page?.id
   const [title, setTitle] = useState(page?.title ?? '')
   const [body, setBody] = useState(page?.body ?? '')
   const [visibility, setVisibility] = useState(page?.visibility ?? (isOwner ? 'gm' : 'group'))
   const [sharedIds, setSharedIds] = useState(page?.shared_user_ids ?? [])
-  const [categoryId, setCategoryId] = useState(page?.category_id ?? '')
+  const [parentId, setParentId] = useState(page?.parent_id ?? defaultParentId ?? '')
   const [icon, setIcon] = useState(page?.icon ?? '')
+
+  // Pages eligible as a parent: every page except this one and its descendants.
+  const excluded = page?.id ? descendantIds(page.id, allPages) : new Set()
+  const parentOptions = allPages
+    .filter((p) => !excluded.has(p.id))
+    .sort((a, b) => (a.title || '').localeCompare(b.title || ''))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [showEmbedPicker, setShowEmbedPicker] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
   const bodyRef = useRef(null)
 
   const members = (campaign.members || []).filter((m) => !m.is_owner)
@@ -95,7 +123,7 @@ function PageEditor({ campaign, isOwner, page, allPages, categories, onSaved, on
         body,
         visibility,
         shared_user_ids: visibility === 'members' ? sharedIds : [],
-        category_id: categoryId || '',
+        parent_id: parentId || '',
         icon: icon || '',
       }
       const result = isNew
@@ -157,15 +185,15 @@ function PageEditor({ campaign, isOwner, page, allPages, categories, onSaved, on
         </select>
 
         <select
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          aria-label={t('wiki.groupLabel')}
+          value={parentId}
+          onChange={(e) => setParentId(e.target.value)}
+          aria-label={t('wiki.parentLabel')}
           style={toolbarControl}
         >
-          <option value="">{t('wiki.uncategorized')}</option>
-          {(categories || []).map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
+          <option value="">{t('wiki.noParent')}</option>
+          {parentOptions.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.title}
             </option>
           ))}
         </select>
@@ -175,6 +203,14 @@ function PageEditor({ campaign, isOwner, page, allPages, categories, onSaved, on
         </button>
         <button type="button" onClick={() => setShowEmbedPicker(true)} style={toolbarBtn}>
           <LuBookOpen size={13} /> {t('wiki.insertEmbed')}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowPreview((v) => !v)}
+          aria-pressed={showPreview}
+          style={showPreview ? { ...toolbarBtn, ...toolbarBtnActive } : toolbarBtn}
+        >
+          <LuEye size={13} /> {t('wiki.preview')}
         </button>
       </div>
 
@@ -245,23 +281,25 @@ function PageEditor({ campaign, isOwner, page, allPages, categories, onSaved, on
             }}
           />
         </div>
-        <div style={{ flex: '1 1 360px', minWidth: 280 }}>
-          <div style={paneLabel}>
-            <LuEye size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-            {t('wiki.preview')}
+        {showPreview && (
+          <div style={{ flex: '1 1 360px', minWidth: 280 }}>
+            <div style={paneLabel}>
+              <LuEye size={12} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+              {t('wiki.preview')}
+            </div>
+            <div
+              style={{
+                padding: '12px 14px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: 10,
+                minHeight: 200,
+              }}
+            >
+              <WikiMarkdown body={body} pageSlugs={allPages.map((p) => p.slug)} />
+            </div>
           </div>
-          <div
-            style={{
-              padding: '12px 14px',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 10,
-              minHeight: 200,
-            }}
-          >
-            <WikiMarkdown body={body} pageSlugs={allPages.map((p) => p.slug)} />
-          </div>
-        </div>
+        )}
       </div>
 
       {error && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</div>}
@@ -291,21 +329,31 @@ function PageEditor({ campaign, isOwner, page, allPages, categories, onSaved, on
 export default function WikiView({ campaign, isOwner }) {
   const { t } = useTranslation()
   const [pages, setPages] = useState(null)
-  const [categories, setCategories] = useState([])
   const [selectedId, setSelectedId] = useState(null)
   const [page, setPage] = useState(null)
   const [editing, setEditing] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [createParentId, setCreateParentId] = useState('')
   const [query, setQuery] = useState('')
-  const [managingCats, setManagingCats] = useState(false)
+  const [importing, setImporting] = useState(false)
+  // Ids of parent pages whose children are collapsed in the sidebar tree.
+  const [collapsed, setCollapsed] = useState(() => new Set())
   const dragId = useRef(null)
 
-  const loadCategories = useCallback(() => {
-    campaigns
-      .listCategories(campaign.id, 'note')
-      .then(setCategories)
-      .catch(() => setCategories([]))
-  }, [campaign.id])
+  const exportWiki = async (format) => {
+    try {
+      await campaigns.exportWiki(campaign.id, format)
+    } catch (e) {
+      alert(e.message)
+    }
+  }
+
+  const toggleCollapse = (id) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
 
   const loadList = useCallback(
     (selectId) => {
@@ -320,7 +368,6 @@ export default function WikiView({ campaign, isOwner }) {
 
   useEffect(() => {
     loadList()
-    loadCategories()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaign.id])
 
@@ -362,37 +409,51 @@ export default function WikiView({ campaign, isOwner }) {
     loadList()
   }
 
-  // --- Drag to reorder / recategorize pages (owner only) ---
+  // Quick icon change without entering the full editor. Updates the list (and the
+  // open page, if it's the one changed) so the new icon shows immediately.
+  const changeIcon = async (pageId, icon) => {
+    await campaigns.updateWikiPage(campaign.id, pageId, { icon: icon || '' })
+    loadList(selectedId)
+    if (page?.id === pageId) setPage((p) => (p ? { ...p, icon: icon || '' } : p))
+  }
+
+  const startCreate = (parentId = '') => {
+    setCreateParentId(parentId)
+    setCreating(true)
+    setEditing(false)
+    setPage(null)
+    setSelectedId(null)
+  }
+
+  // --- Drag to reparent / reorder pages (owner only) ---
   const onPageDragStart = (e, id) => {
     dragId.current = id
     e.dataTransfer.effectAllowed = 'move'
   }
-  const onDropOnGroup = async (group) => {
+  // Drop onto the top-level zone: move the dragged page to the root.
+  const onDropOnRoot = async () => {
     const id = dragId.current
     dragId.current = null
     if (!id) return
     const dragged = pages.find((p) => p.id === id)
-    if (dragged && (dragged.category_id || null) !== (group.categoryId || null)) {
-      await campaigns.updateWikiPage(campaign.id, id, { category_id: group.categoryId || '' })
+    if (dragged && dragged.parent_id) {
+      await campaigns.updateWikiPage(campaign.id, id, { parent_id: '' })
       loadList()
     }
   }
+  // Drop onto a page: nest the dragged page under it (no-op if that would create
+  // a cycle — the server rejects it, but we guard client-side too).
   const onDropOnPage = async (e, target) => {
     e.preventDefault()
     e.stopPropagation()
     const id = dragId.current
     dragId.current = null
     if (!id || id === target.id) return
+    if (descendantIds(id, pages).has(target.id)) return
     const dragged = pages.find((p) => p.id === id)
-    if (dragged && (dragged.category_id || null) !== (target.category_id || null)) {
-      await campaigns.updateWikiPage(campaign.id, id, {
-        category_id: target.category_id || '',
-      })
+    if (dragged && (dragged.parent_id || null) !== target.id) {
+      await campaigns.updateWikiPage(campaign.id, id, { parent_id: target.id })
     }
-    const ids = pages.map((p) => p.id).filter((x) => x !== id)
-    const idx = ids.indexOf(target.id)
-    ids.splice(idx, 0, id)
-    await campaigns.reorderWikiPages(campaign.id, ids)
     loadList()
   }
 
@@ -403,27 +464,157 @@ export default function WikiView({ campaign, isOwner }) {
       </div>
     )
 
-  const filtered = query.trim()
+  const searching = !!query.trim()
+  const matches = searching
     ? pages.filter((p) => p.title.toLowerCase().includes(query.trim().toLowerCase()))
     : pages
 
-  // Uncategorized pages sit at the top level (no header). Each custom category
-  // follows, always shown — even when it has no pages — so it's a drop target.
-  const sortedCats = [...categories].sort((a, b) => a.sort_order - b.sort_order)
-  const uncategorized = filtered.filter(
-    (p) => !p.category_id || !categories.some((c) => c.id === p.category_id)
-  )
-  const groups = [
-    { key: '__uncat__', name: null, icon: null, categoryId: null, pages: uncategorized },
-  ]
-  for (const cat of sortedCats) {
-    groups.push({
-      key: cat.id,
-      name: cat.name,
-      icon: cat.icon,
-      categoryId: cat.id,
-      pages: filtered.filter((p) => p.category_id === cat.id),
-    })
+  // Build the child lookup for the tree. While searching we flatten to the matching
+  // rows (a filtered tree would hide parents of matches), so the list stays useful.
+  const childrenOf = {}
+  for (const p of pages) (childrenOf[p.parent_id || '__root__'] ||= []).push(p)
+  const idSet = new Set(pages.map((p) => p.id))
+  // A page whose parent_id points nowhere (e.g. its parent was filtered out by
+  // visibility) is treated as a root so it never disappears.
+  const rootKey = (p) => (p.parent_id && idSet.has(p.parent_id) ? p.parent_id : '__root__')
+  const roots = pages.filter((p) => rootKey(p) === '__root__')
+
+  const renderRow = (p, depth, flat = false) => {
+    const active = p.id === selectedId && !creating
+    const meta = VIS_META[p.visibility] || VIS_META.gm
+    const { Icon } = meta
+    // In the flat search view, nesting and chevrons are suppressed.
+    const kids = flat ? [] : (childrenOf[p.id] || []).filter((c) => idSet.has(c.id))
+    const hasKids = kids.length > 0
+    const isCollapsed = collapsed.has(p.id)
+    const selectPage = () => {
+      setCreating(false)
+      setSelectedId(p.id)
+    }
+    return (
+      <div key={p.id}>
+        <div
+          draggable={isOwner}
+          onDragStart={(e) => onPageDragStart(e, p.id)}
+          onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
+          onDrop={isOwner ? (e) => onDropOnPage(e, p) : undefined}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            width: '100%',
+            padding: '7px 10px',
+            paddingLeft: 10 + depth * 14,
+            background: active ? 'var(--bg-card)' : 'transparent',
+            border: active ? '1px solid var(--border)' : '1px solid transparent',
+            borderRadius: 8,
+            color: active ? 'var(--text)' : 'var(--text-dim)',
+            cursor: isOwner ? 'grab' : 'pointer',
+            fontSize: 13,
+            boxSizing: 'border-box',
+          }}
+        >
+          {/* Expand/collapse chevron, or a spacer to keep rows aligned. */}
+          {hasKids ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                toggleCollapse(p.id)
+              }}
+              aria-label={t(isCollapsed ? 'wiki.expand' : 'wiki.collapse')}
+              style={{
+                flexShrink: 0,
+                display: 'inline-flex',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                color: 'var(--text-muted)',
+              }}
+            >
+              {isCollapsed ? <LuChevronRight size={13} /> : <LuChevronDown size={13} />}
+            </button>
+          ) : (
+            <span style={{ flexShrink: 0, width: 13 }} aria-hidden="true" />
+          )}
+          {/* The icon is its own popover control on editable rows; the wrapper is
+              non-draggable and stops propagation so grabbing or clicking the icon
+              doesn't start a drag or select the row. */}
+          {p.can_edit ? (
+            <div
+              draggable={false}
+              onDragStart={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              style={{ flexShrink: 0, display: 'inline-flex' }}
+            >
+              <IconPicker
+                value={p.icon}
+                onChange={(icon) => changeIcon(p.id, icon)}
+                fallback={<Icon size={14} style={{ color: meta.color }} aria-hidden="true" />}
+                ariaLabel={t('wiki.iconLabel')}
+                compact
+              />
+            </div>
+          ) : (
+            <CampaignIcon
+              name={p.icon}
+              fallback={Icon}
+              size={12}
+              style={{ flexShrink: 0, color: meta.color }}
+            />
+          )}
+          <button
+            type="button"
+            onClick={selectPage}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              textAlign: 'left',
+              background: 'transparent',
+              border: 'none',
+              color: 'inherit',
+              cursor: 'pointer',
+              font: 'inherit',
+              padding: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {p.title}
+          </button>
+          {isOwner && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                startCreate(p.id)
+              }}
+              aria-label={t('wiki.addSubpage')}
+              title={t('wiki.addSubpage')}
+              style={{
+                flexShrink: 0,
+                display: 'inline-flex',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <LuPlus size={13} />
+            </button>
+          )}
+        </div>
+        {hasKids && !isCollapsed && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
+            {kids.map((c) => renderRow(c, depth + 1))}
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -431,12 +622,7 @@ export default function WikiView({ campaign, isOwner }) {
       {/* Page list */}
       <div style={{ flex: '0 0 240px', maxWidth: 240 }}>
         <button
-          onClick={() => {
-            setCreating(true)
-            setEditing(false)
-            setPage(null)
-            setSelectedId(null)
-          }}
+          onClick={() => startCreate('')}
           style={{ ...goldBtn, width: '100%', justifyContent: 'center', marginBottom: 10 }}
         >
           <LuPlus size={14} /> {t('wiki.newPage')}
@@ -470,130 +656,45 @@ export default function WikiView({ campaign, isOwner }) {
           />
         </div>
 
-        {filtered.length === 0 && categories.length === 0 ? (
+        {pages.length === 0 ? (
           <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 4px' }}>
             {t('wiki.noPages')}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {groups.map((g) => (
-              <div
-                key={g.key}
-                onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
-                onDrop={isOwner ? () => onDropOnGroup(g) : undefined}
-              >
-                {g.name && (
-                  <div
-                    style={{
-                      fontSize: 11,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      color: 'var(--text-muted)',
-                      fontWeight: 600,
-                      padding: '0 4px 4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 5,
-                    }}
-                  >
-                    <CampaignIcon name={g.icon} size={12} />
-                    {g.name}
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {g.pages.length === 0 && g.name ? (
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: 'var(--text-muted)',
-                        fontStyle: 'italic',
-                        padding: '6px 10px',
-                        border: '1px dashed var(--border)',
-                        borderRadius: 8,
-                      }}
-                    >
-                      {t('wiki.emptyGroup')}
-                    </div>
-                  ) : (
-                    g.pages.map((p) => {
-                      const active = p.id === selectedId && !creating
-                      const { Icon } = VIS_META[p.visibility] || VIS_META.gm
-                      return (
-                        <button
-                          key={p.id}
-                          draggable={isOwner}
-                          onDragStart={(e) => onPageDragStart(e, p.id)}
-                          onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
-                          onDrop={isOwner ? (e) => onDropOnPage(e, p) : undefined}
-                          onClick={() => {
-                            setCreating(false)
-                            setSelectedId(p.id)
-                          }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            width: '100%',
-                            textAlign: 'left',
-                            padding: '7px 10px',
-                            background: active ? 'var(--bg-card)' : 'transparent',
-                            border: active ? '1px solid var(--border)' : '1px solid transparent',
-                            borderRadius: 8,
-                            color: active ? 'var(--text)' : 'var(--text-dim)',
-                            cursor: isOwner ? 'grab' : 'pointer',
-                            fontSize: 13,
-                          }}
-                        >
-                          <CampaignIcon
-                            name={p.icon}
-                            fallback={Icon}
-                            size={12}
-                            style={{
-                              flexShrink: 0,
-                              color: (VIS_META[p.visibility] || VIS_META.gm).color,
-                            }}
-                          />
-                          <span
-                            style={{
-                              flex: 1,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {p.title}
-                          </span>
-                        </button>
-                      )
-                    })
-                  )}
-                </div>
-              </div>
-            ))}
+          <div
+            // Dropping in the empty space below the tree moves a page to the root.
+            onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
+            onDrop={isOwner ? onDropOnRoot : undefined}
+            style={{ display: 'flex', flexDirection: 'column', gap: 2, minHeight: 40 }}
+          >
+            {searching
+              ? matches.map((p) => renderRow(p, 0, true))
+              : roots.map((p) => renderRow(p, 0))}
           </div>
         )}
 
         {isOwner && (
-          <button
-            onClick={() => setManagingCats(true)}
-            style={{
-              marginTop: 12,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              width: '100%',
-              justifyContent: 'center',
-              padding: '6px 10px',
-              background: 'transparent',
-              border: '1px dashed var(--border)',
-              borderRadius: 8,
-              color: 'var(--text-muted)',
-              cursor: 'pointer',
-              fontSize: 12,
-            }}
-          >
-            <LuFolderCog size={13} /> {t('wiki.manageGroups')}
-          </button>
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => exportWiki('md')}
+                title={t('wiki.exportMd')}
+                style={{ ...dashedBtn, flex: 1 }}
+              >
+                <LuDownload size={13} /> {t('wiki.export')}
+              </button>
+              <button
+                onClick={() => setImporting(true)}
+                title={t('wiki.importTitle')}
+                style={{ ...dashedBtn, flex: 1 }}
+              >
+                <LuUpload size={13} /> {t('wiki.import')}
+              </button>
+            </div>
+            <button onClick={() => exportWiki('json')} style={{ ...dashedBtn, fontSize: 11 }}>
+              {t('wiki.exportJson')}
+            </button>
+          </div>
         )}
       </div>
 
@@ -605,7 +706,7 @@ export default function WikiView({ campaign, isOwner }) {
             isOwner={isOwner}
             page={null}
             allPages={pages}
-            categories={categories}
+            defaultParentId={createParentId}
             onSaved={handleSaved}
             onCancel={() => setCreating(false)}
           />
@@ -619,7 +720,6 @@ export default function WikiView({ campaign, isOwner }) {
             isOwner={isOwner}
             page={page}
             allPages={pages}
-            categories={categories}
             onSaved={handleSaved}
             onCancel={() => setEditing(false)}
           />
@@ -635,7 +735,19 @@ export default function WikiView({ campaign, isOwner }) {
               }}
             >
               <div>
-                <h2 style={{ fontSize: 22, fontWeight: 700, margin: '0 0 6px' }}>{page.title}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 0 6px' }}>
+                  {page.can_edit ? (
+                    <IconPicker
+                      value={page.icon}
+                      onChange={(icon) => changeIcon(page.id, icon)}
+                      fallback={<LuFileText size={18} aria-hidden="true" />}
+                      ariaLabel={t('wiki.iconLabel')}
+                    />
+                  ) : (
+                    page.icon && <CampaignIcon name={page.icon} size={20} />
+                  )}
+                  <h2 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>{page.title}</h2>
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <VisibilityBadge visibility={page.visibility} />
                   {page.created_by_name && (
@@ -717,21 +829,31 @@ export default function WikiView({ campaign, isOwner }) {
         )}
       </div>
 
-      {managingCats && (
-        <CategoryManager
+      {importing && (
+        <WikiImportModal
           campaignId={campaign.id}
-          kind="note"
-          onClose={() => setManagingCats(false)}
-          onChanged={() => {
-            loadCategories()
-            loadList()
-          }}
+          onClose={() => setImporting(false)}
+          onImported={() => loadList()}
         />
       )}
     </div>
   )
 }
 
+const dashedBtn = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  width: '100%',
+  justifyContent: 'center',
+  padding: '6px 10px',
+  background: 'transparent',
+  border: '1px dashed var(--border)',
+  borderRadius: 8,
+  color: 'var(--text-muted)',
+  cursor: 'pointer',
+  fontSize: 12,
+}
 const toolbarBtn = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -743,6 +865,11 @@ const toolbarBtn = {
   color: 'var(--text-dim)',
   cursor: 'pointer',
   fontSize: 12,
+}
+const toolbarBtnActive = {
+  background: 'var(--bg-card)',
+  borderColor: 'var(--gold)',
+  color: 'var(--gold)',
 }
 const toolbarControl = {
   appearance: 'auto',

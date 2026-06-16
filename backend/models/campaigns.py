@@ -235,7 +235,12 @@ class WikiPage(Base):
     page_type = Column(String(20), default="note")  # note | session
     session_date = Column(String(10), nullable=True)  # YYYY-MM-DD for session pages
     created_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    # Optional GM-defined notes group. When null, the page is "Uncategorized".
+    # Parent page for nesting. When null, the page sits at the wiki's top level.
+    # Replaces the old flat note-category grouping: a "category" is now just a page
+    # whose children nest under it, to arbitrary depth.
+    parent_id = Column(String(36), ForeignKey("wiki_pages.id"), nullable=True)
+    # Deprecated: legacy flat note-category grouping. Retained only so the one-time
+    # note-category -> parent-page migration can read it; new code uses parent_id.
     category_id = Column(String(36), ForeignKey("campaign_categories.id"), nullable=True)
     # Optional Lucide icon name (e.g. "user", "swords") shown in the page list.
     icon = Column(String(50), nullable=True)

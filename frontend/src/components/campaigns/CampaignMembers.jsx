@@ -13,9 +13,12 @@ import {
   LuDownload,
   LuTrash2,
   LuLink,
+  LuFilePlus2,
+  LuPencilLine,
 } from 'react-icons/lu'
 import { campaigns } from '../../api'
 import Spinner from '../Spinner'
+import { CharacterSheetEditor, SheetTemplatePicker } from './CharacterSheetEditor'
 
 const STATUS_COLORS = {
   accepted: 'var(--success, #4caf50)',
@@ -46,6 +49,77 @@ const smallBtn = (color) => ({
   alignItems: 'center',
 })
 
+// Warns that re-uploading replaces the current sheet, offering to download it first.
+function ReplaceSheetDialog({ downloadUrl, onCancel, onReplace }) {
+  const { t } = useTranslation()
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.7)',
+        zIndex: 1100,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+      }}
+      onClick={(e) => e.target === e.currentTarget && onCancel()}
+    >
+      <div
+        style={{
+          background: 'var(--bg-panel)',
+          border: '1px solid var(--border)',
+          borderRadius: 16,
+          padding: 24,
+          width: '100%',
+          maxWidth: 420,
+        }}
+      >
+        <h3 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 12px' }}>
+          {t('members.replaceSheet')}
+        </h3>
+        <p style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6, margin: '0 0 18px' }}>
+          {t('members.replaceSheetWarning')}
+        </p>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <button onClick={onCancel} style={{ ...smallBtn('var(--text)'), padding: '8px 14px' }}>
+            {t('members.cancel')}
+          </button>
+          <a
+            href={downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              ...smallBtn('var(--text)'),
+              padding: '8px 14px',
+              textDecoration: 'none',
+              gap: 6,
+            }}
+          >
+            <LuDownload size={13} aria-hidden="true" /> {t('members.downloadCurrent')}
+          </a>
+          <button
+            onClick={onReplace}
+            style={{
+              padding: '8px 14px',
+              background: 'var(--gold)',
+              border: 'none',
+              borderRadius: 6,
+              color: '#1a1209',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: 13,
+            }}
+          >
+            {t('members.replace')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function MemberRow({
   member,
   isOwner,
@@ -67,6 +141,9 @@ export function MemberRow({
   const [busy, setBusy] = useState(false)
   const [linkingSheet, setLinkingSheet] = useState(false)
   const [sheetUrlValue, setSheetUrlValue] = useState('')
+  const [editingSheet, setEditingSheet] = useState(false)
+  const [pickingTemplate, setPickingTemplate] = useState(false)
+  const [confirmReplace, setConfirmReplace] = useState(false)
 
   const displayLabel = member.display_name || member.username
 
@@ -141,6 +218,12 @@ export function MemberRow({
   }
 
   const hasSheet = member.has_sheet || !!member.character_sheet_url
+
+  // Re-uploading replaces the existing sheet, losing the prior version. Confirm first.
+  const requestSheetUpload = () => {
+    if (hasSheet) setConfirmReplace(true)
+    else sheetInputRef.current?.click()
+  }
 
   return (
     <div
@@ -370,6 +453,28 @@ export function MemberRow({
                     : member.character_sheet_filename || t('members.characterSheet')}
                   <LuDownload size={11} aria-hidden="true" />
                 </a>
+                {canEditMedia &&
+                  !member.character_sheet_url &&
+                  (member.character_sheet_filename || '').toLowerCase().endsWith('.pdf') && (
+                    <button
+                      onClick={() => setEditingSheet(true)}
+                      disabled={busy}
+                      style={sheetActionBtn}
+                    >
+                      <LuPencilLine size={11} aria-hidden="true" /> {t('members.editSheetInApp')}
+                    </button>
+                  )}
+                {canEditMedia && (
+                  <button
+                    onClick={requestSheetUpload}
+                    disabled={busy}
+                    aria-label={t('members.replaceSheet')}
+                    title={t('members.replaceSheet')}
+                    style={sheetActionBtn}
+                  >
+                    <LuUpload size={11} aria-hidden="true" />
+                  </button>
+                )}
                 {canEditMedia && (
                   <button
                     onClick={removeSheet}
@@ -435,6 +540,13 @@ export function MemberRow({
                     <LuUpload size={11} aria-hidden="true" /> {t('members.uploadSheet')}
                   </button>
                   <button
+                    onClick={() => setPickingTemplate(true)}
+                    disabled={busy}
+                    style={sheetActionBtn}
+                  >
+                    <LuFilePlus2 size={11} aria-hidden="true" /> {t('members.createFromTemplate')}
+                  </button>
+                  <button
                     onClick={() => {
                       setSheetUrlValue('')
                       setLinkingSheet(true)
@@ -454,6 +566,38 @@ export function MemberRow({
                 accept="image/png,image/jpeg,image/webp,image/gif,application/pdf"
                 onChange={handleSheetFile}
                 style={{ display: 'none' }}
+              />
+            )}
+            {editingSheet && (
+              <CharacterSheetEditor
+                campaignId={campaignId}
+                memberId={member.id}
+                onClose={() => setEditingSheet(false)}
+                onSaved={onMediaChanged}
+              />
+            )}
+            {pickingTemplate && (
+              <SheetTemplatePicker
+                campaignId={campaignId}
+                memberId={member.id}
+                onClose={() => setPickingTemplate(false)}
+                onDuplicated={() => {
+                  setPickingTemplate(false)
+                  onMediaChanged?.()
+                  setEditingSheet(true)
+                }}
+              />
+            )}
+            {confirmReplace && (
+              <ReplaceSheetDialog
+                downloadUrl={
+                  member.character_sheet_url || campaigns.memberSheetUrl(campaignId, member.id)
+                }
+                onCancel={() => setConfirmReplace(false)}
+                onReplace={() => {
+                  setConfirmReplace(false)
+                  sheetInputRef.current?.click()
+                }}
               />
             )}
           </div>

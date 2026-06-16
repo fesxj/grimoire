@@ -1,13 +1,19 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import useSessionState from '../hooks/useSessionState'
 import { useTranslation } from 'react-i18next'
-import { LuUser, LuX, LuTag, LuSearch, LuHeart } from 'react-icons/lu'
+import { LuUser, LuX, LuListChecks, LuSearch, LuHeart } from 'react-icons/lu'
 import api from '../api'
 import Spinner from '../components/Spinner'
 import TokenFolderGroup from '../components/tokens/TokenFolderGroup'
 import DownloadArchiveModal from '../components/DownloadArchiveModal'
+import BulkActionBar from '../components/BulkActionBar'
+import AddToCampaignModal from '../components/AddToCampaignModal'
+import BulkEditModal from '../components/BulkEditModal'
+import useBulkSelection from '../hooks/useBulkSelection'
 import { getUserPrefs } from '../hooks/useUserPrefs'
+import useViewMode from '../hooks/useViewMode'
+import ViewModeToggle from '../components/ViewModeToggle'
 import { useAuth } from '../context/AuthContext'
 import { useFavorites } from '../context/FavoritesContext'
 
@@ -37,18 +43,23 @@ export default function TokensView() {
   const [filter, setFilter] = useState('')
   const [selectedTags, setSelectedTags] = useState(new Set())
   const [favOnly, setFavOnly] = useState(false)
+  const [viewMode, cycleViewMode] = useViewMode('token')
   const [collapsed, setCollapsed] = useSessionState('grimoire:tokens:collapsed', new Set())
   const [editingFolder, setEditingFolder] = useState(null)
   const [showAllTags, setShowAllTags] = useState(false)
   const [downloadModal, setDownloadModal] = useState(null)
 
-  // Bulk tagging
-  const [bulkMode, setBulkMode] = useState(false)
-  const [selectedTokenIds, setSelectedTokenIds] = useState(new Set())
-  const [selectedFolderPaths, setSelectedFolderPaths] = useState(new Set())
-  const [bulkInput, setBulkInput] = useState('')
+  // Bulk multiselect
+  const bulk = useBulkSelection()
+  const {
+    bulkMode,
+    selectedIds: selectedTokenIds,
+    selectedFolderPaths,
+    count: totalSelected,
+  } = bulk
   const [bulkApplying, setBulkApplying] = useState(false)
-  const bulkInputRef = useRef(null)
+  const [showAddToCampaign, setShowAddToCampaign] = useState(false)
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
 
   useEffect(() => {
     Promise.all([api.get('/tokens'), api.get('/token-folders')]).then(
@@ -85,50 +96,8 @@ export default function TokensView() {
     setFolderTags((prev) => ({ ...prev, [path]: tags }))
   }
 
-  const enterBulkMode = () => {
-    setBulkMode(true)
-    setTimeout(() => bulkInputRef.current?.focus(), 50)
-  }
-
-  const exitBulkMode = () => {
-    setBulkMode(false)
-    setSelectedTokenIds(new Set())
-    setSelectedFolderPaths(new Set())
-    setBulkInput('')
-  }
-
-  const toggleTokenSelect = (id) =>
-    setSelectedTokenIds((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-
-  const toggleFolderSelect = (folderPath, tokensInFolder) => {
-    const tokenIds = tokensInFolder.map((tok) => tok.id)
-    const allSel =
-      selectedFolderPaths.has(folderPath) && tokenIds.every((id) => selectedTokenIds.has(id))
-    setSelectedFolderPaths((prev) => {
-      const next = new Set(prev)
-      allSel ? next.delete(folderPath) : next.add(folderPath)
-      return next
-    })
-    setSelectedTokenIds((prev) => {
-      const next = new Set(prev)
-      if (allSel) tokenIds.forEach((id) => next.delete(id))
-      else tokenIds.forEach((id) => next.add(id))
-      return next
-    })
-  }
-
-  const applyBulkTags = async () => {
-    const newTags = bulkInput
-      .split(',')
-      .map((tag) => tag.trim().toLowerCase())
-      .filter(Boolean)
-    const totalSel = selectedTokenIds.size + selectedFolderPaths.size
-    if (!newTags.length || totalSel === 0 || bulkApplying) return
-
+  const applyBulkTags = async (newTags) => {
+    if (!newTags.length || totalSelected === 0 || bulkApplying) return
     setBulkApplying(true)
     const promises = []
 
@@ -159,12 +128,17 @@ export default function TokensView() {
       }),
     }))
 
-    setBulkInput('')
-    setSelectedTokenIds(new Set())
-    setSelectedFolderPaths(new Set())
+    bulk.clear()
     setBulkApplying(false)
-    bulkInputRef.current?.focus()
   }
+
+  const selectedTokenObjects = () => tokens.tokens.filter((tok) => selectedTokenIds.has(tok.id))
+
+  const applyTokenEdits = (edited) =>
+    setTokens((prev) => ({
+      ...prev,
+      tokens: prev.tokens.map((tok) => (edited[tok.id] ? { ...tok, ...edited[tok.id] } : tok)),
+    }))
 
   if (!tokens)
     return (
@@ -219,12 +193,17 @@ export default function TokensView() {
   })
 
   const prefs = getUserPrefs()
-  const cardSize = prefs.cardSize || 'comfortable'
+  const list = viewMode === 'list'
+  const cardSize = viewMode === 'compact' ? 'compact' : 'comfortable'
   const sort = prefs.librarySort || 'az'
   const folderEntries = Object.entries(byFolder).sort(([a], [b]) =>
     sort === 'za' ? b.localeCompare(a) : a.localeCompare(b)
   )
-  const totalSelected = selectedTokenIds.size + selectedFolderPaths.size
+  // Flat ordered list of visible token ids, for shift-range selection.
+  const orderedIds = folderEntries.flatMap(([, subfolders]) =>
+    Object.values(subfolders).flatMap((toks) => toks.map((tok) => tok.id))
+  )
+  const toggleTokenSelect = (id, mods = {}) => bulk.toggleItem(id, { ...mods, orderedIds })
 
   return (
     <div
@@ -364,7 +343,7 @@ export default function TokensView() {
               })()}
               {!isPlayer && (
                 <button
-                  onClick={bulkMode ? exitBulkMode : enterBulkMode}
+                  onClick={bulkMode ? bulk.exit : bulk.enter}
                   style={{
                     ...toolBtnStyle,
                     color: bulkMode ? 'var(--gold)' : 'var(--text-dim)',
@@ -374,10 +353,11 @@ export default function TokensView() {
                     gap: 6,
                   }}
                 >
-                  <LuTag size={13} />
-                  {bulkMode ? t('tokens.cancelBulk') : t('tokens.bulkTag')}
+                  <LuListChecks size={13} />
+                  {bulkMode ? t('tokens.cancelBulk') : t('common.select')}
                 </button>
               )}
+              <ViewModeToggle mode={viewMode} onCycle={cycleViewMode} style={toolBtnStyle} />
               <button
                 onClick={() => setFavOnly((v) => !v)}
                 aria-pressed={favOnly}
@@ -474,7 +454,7 @@ export default function TokensView() {
 
         {bulkMode && (
           <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 20 }}>
-            {t('tokens.bulkHint')}
+            {t('bulk.hint')}
           </p>
         )}
 
@@ -484,6 +464,7 @@ export default function TokensView() {
             folder={folder}
             subfolders={subfolders}
             cardSize={cardSize}
+            list={list}
             collapsed={collapsed}
             onToggle={toggle}
             folderTags={folderTags}
@@ -496,7 +477,7 @@ export default function TokensView() {
             selectedTokenIds={selectedTokenIds}
             selectedFolderPaths={selectedFolderPaths}
             onToggleToken={toggleTokenSelect}
-            onToggleFolder={toggleFolderSelect}
+            onToggleFolder={bulk.toggleFolder}
             onDownload={setDownloadModal}
           />
         ))}
@@ -504,7 +485,13 @@ export default function TokensView() {
         {folderEntries.length === 0 && (
           <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-muted)' }}>
             <LuUser size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
-            <p>{favOnly ? t('favorites.noFavoritesInView') : filter ? t('tokens.noTokensFilter') : t('tokens.noTokens')}</p>
+            <p>
+              {favOnly
+                ? t('favorites.noFavoritesInView')
+                : filter
+                  ? t('tokens.noTokensFilter')
+                  : t('tokens.noTokens')}
+            </p>
           </div>
         )}
       </div>
@@ -517,80 +504,42 @@ export default function TokensView() {
         />
       )}
 
-      {/* Bulk action bar */}
       {bulkMode && (
-        <>
-          <style>{`
-            .bulk-bar { display: grid; grid-template-areas: 'count input' 'apply done'; grid-template-columns: auto 1fr; gap: 8px; }
-            .bulk-bar-apply { justify-self: start; }
-            .bulk-bar-done  { justify-self: end; }
-            @media (min-width: 600px) {
-              .bulk-bar { grid-template-areas: 'count input apply done'; grid-template-columns: auto minmax(0, 400px) auto auto; align-items: center; justify-content: start; }
-            }
-          `}</style>
-          <div
-            className="bulk-bar"
-            style={{
-              position: 'sticky',
-              bottom: 0,
-              zIndex: 200,
-              background: 'var(--bg-panel)',
-              borderTop: '1px solid var(--border)',
-              padding: '12px 16px',
-              boxSizing: 'border-box',
-            }}
-          >
-            <span
-              style={{
-                gridArea: 'count',
-                fontSize: 14,
-                color: totalSelected > 0 ? 'var(--text)' : 'var(--text-muted)',
-                alignSelf: 'center',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {totalSelected > 0
-                ? t('common.selected', { count: totalSelected })
-                : t('common.nothingSelected')}
-            </span>
-            <input
-              id="tokens-bulk-tag-input"
-              ref={bulkInputRef}
-              type="text"
-              aria-label={t('tokens.tagsPlaceholder')}
-              value={bulkInput}
-              onChange={(e) => setBulkInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && applyBulkTags()}
-              placeholder={t('tokens.tagsPlaceholder')}
-              style={{ gridArea: 'input', fontSize: 14, width: '100%', boxSizing: 'border-box' }}
-            />
-            <button
-              onClick={applyBulkTags}
-              disabled={!bulkInput.trim() || totalSelected === 0 || bulkApplying}
-              className="bulk-bar-apply"
-              style={{
-                gridArea: 'apply',
-                padding: '7px 18px',
-                borderRadius: 6,
-                fontSize: 14,
-                cursor: 'pointer',
-                background: 'var(--gold-dim)',
-                color: 'var(--bg-deep)',
-                border: 'none',
-                opacity: !bulkInput.trim() || totalSelected === 0 || bulkApplying ? 0.5 : 1,
-              }}
-            >
-              {bulkApplying ? t('tokens.applying') : t('tokens.addTags')}
-            </button>
-            <button
-              onClick={exitBulkMode}
-              className="bulk-bar-done"
-              style={{ gridArea: 'done', ...toolBtnStyle }}
-            >
-              {t('common.done')}
-            </button>
-          </div>
-        </>
+        <BulkActionBar
+          count={totalSelected}
+          applying={bulkApplying}
+          onApplyTags={applyBulkTags}
+          onAddToCampaign={() => setShowAddToCampaign(true)}
+          onBulkEdit={() => setShowBulkEdit(true)}
+          onDone={bulk.exit}
+        />
+      )}
+
+      {showAddToCampaign && (
+        <AddToCampaignModal
+          items={selectedTokenObjects().map((tok) => ({
+            resource_type: 'token',
+            resource_id: tok.id,
+          }))}
+          onClose={() => setShowAddToCampaign(false)}
+          onAdded={() => {
+            setShowAddToCampaign(false)
+            bulk.exit()
+          }}
+        />
+      )}
+
+      {showBulkEdit && (
+        <BulkEditModal
+          type="token"
+          items={selectedTokenObjects()}
+          onClose={() => setShowBulkEdit(false)}
+          onSaved={(edited) => {
+            applyTokenEdits(edited)
+            setShowBulkEdit(false)
+            bulk.exit()
+          }}
+        />
       )}
     </div>
   )

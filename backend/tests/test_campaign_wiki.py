@@ -93,6 +93,16 @@ class TestWikiCRUD:
         assert resp.status_code == 200
         assert any(p["title"] == "One" for p in resp.json())
 
+    def test_list_includes_can_edit(self, client, gm_headers, player_headers, campaign_with_member):
+        # The sidebar gates the quick icon picker on can_edit, so the list must
+        # carry it. The GM owns the page; the player can view but not edit it.
+        cid = campaign_with_member
+        _create(client, gm_headers, cid, title="Lore", visibility="group")
+        gm_list = client.get(f"/api/campaigns/{cid}/wiki", headers=gm_headers).json()
+        assert all(p["can_edit"] is True for p in gm_list)
+        player_list = client.get(f"/api/campaigns/{cid}/wiki", headers=player_headers).json()
+        assert all(p["can_edit"] is False for p in player_list)
+
 
 class TestWikiVisibility:
     def test_gm_page_hidden_from_player(self, client, gm_headers, player_headers, campaign_with_member):
@@ -305,5 +315,112 @@ class TestWikiMigration:
             assert visibilities == ["gm", "group", "group"]
             # All legacy sessions consumed.
             assert db.query(SessionNote).filter_by(campaign_id=cid).count() == 0
+        finally:
+            db.close()
+
+
+class TestWikiNesting:
+    def test_create_under_parent(self, client, gm_headers, gm_campaign):
+        cid = gm_campaign["id"]
+        parent = _create(client, gm_headers, cid, title="Bestiary").json()
+        child = _create(
+            client, gm_headers, cid, title="Goblin", parent_id=parent["id"]
+        ).json()
+        assert child["parent_id"] == parent["id"]
+
+    def test_reject_unknown_parent(self, client, gm_headers, gm_campaign):
+        cid = gm_campaign["id"]
+        resp = _create(client, gm_headers, cid, title="Orphan", parent_id="nope")
+        assert resp.status_code == 400
+
+    def test_reject_self_parent(self, client, gm_headers, gm_campaign):
+        cid = gm_campaign["id"]
+        page = _create(client, gm_headers, cid, title="Loop").json()
+        resp = client.patch(
+            f"/api/campaigns/{cid}/wiki/{page['id']}",
+            json={"parent_id": page["id"]},
+            headers=gm_headers,
+        )
+        assert resp.status_code == 400
+
+    def test_reject_descendant_cycle(self, client, gm_headers, gm_campaign):
+        cid = gm_campaign["id"]
+        a = _create(client, gm_headers, cid, title="A").json()
+        b = _create(client, gm_headers, cid, title="B", parent_id=a["id"]).json()
+        # Moving A under B would create a cycle (B is A's child).
+        resp = client.patch(
+            f"/api/campaigns/{cid}/wiki/{a['id']}",
+            json={"parent_id": b["id"]},
+            headers=gm_headers,
+        )
+        assert resp.status_code == 400
+
+    def test_move_to_top_level_with_empty_sentinel(self, client, gm_headers, gm_campaign):
+        cid = gm_campaign["id"]
+        parent = _create(client, gm_headers, cid, title="Parent").json()
+        child = _create(client, gm_headers, cid, title="Child", parent_id=parent["id"]).json()
+        moved = client.patch(
+            f"/api/campaigns/{cid}/wiki/{child['id']}",
+            json={"parent_id": ""},
+            headers=gm_headers,
+        ).json()
+        assert moved["parent_id"] is None
+
+    def test_delete_reparents_children(self, client, gm_headers, gm_campaign):
+        cid = gm_campaign["id"]
+        grand = _create(client, gm_headers, cid, title="Grandparent").json()
+        parent = _create(client, gm_headers, cid, title="Parent", parent_id=grand["id"]).json()
+        child = _create(client, gm_headers, cid, title="Child", parent_id=parent["id"]).json()
+        # Deleting the middle page lifts its child up to the grandparent.
+        client.delete(f"/api/campaigns/{cid}/wiki/{parent['id']}", headers=gm_headers)
+        got = client.get(f"/api/campaigns/{cid}/wiki/{child['id']}", headers=gm_headers).json()
+        assert got["parent_id"] == grand["id"]
+
+
+class TestNoteCategoryMigration:
+    def test_note_categories_become_parent_pages(self, client, gm_headers, gm_id):
+        from backend.config import SessionLocal
+        from backend.models import CampaignCategory, Campaign, WikiPage
+        from backend import wiki_category_migration
+
+        db = SessionLocal()
+        try:
+            campaign = Campaign(name=f"Cat {uid()}", owner_id=gm_id, is_gm_campaign=True)
+            db.add(campaign)
+            db.commit()
+            db.refresh(campaign)
+            cid = campaign.id
+
+            cat = CampaignCategory(campaign_id=cid, kind="note", name="Bestiary", icon="swords")
+            db.add(cat)
+            db.commit()
+            db.refresh(cat)
+            page = WikiPage(
+                campaign_id=cid, title="Goblin", slug="goblin", category_id=cat.id,
+                created_by_id=gm_id,
+            )
+            db.add(page)
+            db.commit()
+            page_id = page.id
+
+            wiki_category_migration.migrate(db)
+
+            # The note category is gone, replaced by a parent page of the same name.
+            assert db.query(CampaignCategory).filter_by(id=cat.id).first() is None
+            parent = (
+                db.query(WikiPage)
+                .filter_by(campaign_id=cid, title="Bestiary", parent_id=None)
+                .first()
+            )
+            assert parent is not None
+            assert parent.icon == "swords"
+            # The page now nests under that parent and no longer references a category.
+            moved = db.query(WikiPage).filter_by(id=page_id).first()
+            assert moved.parent_id == parent.id
+            assert moved.category_id is None
+
+            # Idempotent: a second run finds no note categories and does nothing.
+            wiki_category_migration.migrate(db)
+            assert db.query(WikiPage).filter_by(campaign_id=cid, title="Bestiary").count() == 1
         finally:
             db.close()

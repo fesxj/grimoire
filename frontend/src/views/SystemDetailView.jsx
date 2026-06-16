@@ -14,9 +14,14 @@ import {
   LuChevronRight,
   LuDownload,
   LuHeart,
+  LuListChecks,
 } from 'react-icons/lu'
 import api from '../api'
 import DownloadArchiveModal from '../components/DownloadArchiveModal'
+import BulkActionBar from '../components/BulkActionBar'
+import AddToCampaignModal from '../components/AddToCampaignModal'
+import BulkEditModal from '../components/BulkEditModal'
+import useBulkSelection from '../hooks/useBulkSelection'
 
 import { useAuth } from '../context/AuthContext'
 import { useFavorites } from '../context/FavoritesContext'
@@ -27,6 +32,8 @@ import BookEditor from '../components/system/BookEditor'
 import SystemEditor from '../components/system/SystemEditor'
 import BookFolderGroup from '../components/system/BookFolderGroup'
 import FavoriteButton from '../components/FavoriteButton'
+import ViewModeToggle from '../components/ViewModeToggle'
+import useViewMode from '../hooks/useViewMode'
 import { CATEGORY_ICONS, CATEGORY_ORDER } from '../constants'
 
 /** Extract the subfolder name from a book's relative_path.
@@ -60,11 +67,22 @@ export default function SystemDetailView() {
   const [showAllTags, setShowAllTags] = useState(false)
   const [bookSort, setBookSort] = useState('title')
   const [favOnly, setFavOnly] = useState(false)
-  const [searchQuery, setSearchQuery] = useSessionState(`grimoire:system:${systemId}:search-query`, '')
+  const [viewMode, cycleViewMode] = useViewMode('book')
+  const [searchQuery, setSearchQuery] = useSessionState(
+    `grimoire:system:${systemId}:search-query`,
+    ''
+  )
   const [searchResults, setSearchResults] = useState(null)
   const [searching, setSearching] = useState(false)
   const searchTimer = useRef(null)
   const [downloadModal, setDownloadModal] = useState(null)
+
+  // Bulk multiselect (books only)
+  const bulk = useBulkSelection()
+  const { bulkMode, selectedIds: selectedBookIds, count: totalSelected } = bulk
+  const [bulkApplying, setBulkApplying] = useState(false)
+  const [showAddToCampaign, setShowAddToCampaign] = useState(false)
+  const [showBulkEdit, setShowBulkEdit] = useState(false)
 
   useEffect(() => {
     api.get(`/systems/${systemId}`).then(setSystem)
@@ -134,7 +152,8 @@ export default function SystemDetailView() {
   ;(system.books || [])
     .filter(
       (book) =>
-        (selectedTags.size === 0 || [...selectedTags].every((tag) => (book.tags || []).includes(tag))) &&
+        (selectedTags.size === 0 ||
+          [...selectedTags].every((tag) => (book.tags || []).includes(tag))) &&
         (!favOnly || isFavorite('book', book.id))
     )
     .forEach((book) => {
@@ -147,12 +166,65 @@ export default function SystemDetailView() {
   const collapseAll = () => setCollapsedCats(new Set(allCatKeys))
   const expandAll = () => setCollapsedCats(new Set())
 
+  // Flat ordered list of visible book ids (category render order), for
+  // shift-range selection.
+  const orderedBookIds = [
+    ...CATEGORY_ORDER,
+    ...allCatKeys.filter((c) => !CATEGORY_ORDER.includes(c)),
+  ]
+    .filter((cat) => categories[cat])
+    .flatMap((cat) => sortBooks(categories[cat]).map((b) => b.id))
+  const toggleBookSelect = (id, mods = {}) =>
+    bulk.toggleItem(id, { ...mods, orderedIds: orderedBookIds })
+
+  const selectedBookObjects = () => (system.books || []).filter((b) => selectedBookIds.has(b.id))
+
+  const applyBulkTags = async (newTags) => {
+    if (!newTags.length || totalSelected === 0 || bulkApplying) return
+    setBulkApplying(true)
+    const updates = {}
+    await Promise.all(
+      [...selectedBookIds].map((id) => {
+        const book = (system.books || []).find((b) => b.id === id)
+        if (!book) return null
+        const merged = [...new Set([...(book.tags || []), ...newTags])]
+        updates[id] = { tags: merged }
+        return api.patch(`/books/${id}`, { tags: merged })
+      })
+    )
+    setSystem((s) => ({
+      ...s,
+      books: s.books.map((b) => (updates[b.id] ? { ...b, ...updates[b.id] } : b)),
+    }))
+    bulk.clear()
+    setBulkApplying(false)
+  }
+
+  const applyBookEdits = (edited) =>
+    setSystem((s) => ({
+      ...s,
+      books: s.books.map((b) => (edited[b.id] ? { ...b, ...edited[b.id] } : b)),
+    }))
+
   const SORT_OPTIONS = [
     ['title', t('common.sortAZ')],
     ['year', t('common.sortYear')],
     ['pages', t('common.sortPages')],
     ['size', t('common.sortSize')],
   ]
+
+  // Book view mode → layout flags shared with BookRow / BookFolderGroup.
+  const card = viewMode === 'card'
+  const compact = viewMode === 'compact'
+  const list = viewMode === 'list'
+  // Container for a list of books in the current view mode.
+  const booksContainerStyle = list
+    ? { display: 'flex', flexDirection: 'column', gap: 8 }
+    : {
+        display: 'grid',
+        gridTemplateColumns: `repeat(auto-fill, minmax(${compact ? '140px' : '200px'}, 1fr))`,
+        gap: compact ? 12 : 16,
+      }
 
   return (
     <div
@@ -349,6 +421,7 @@ export default function SystemDetailView() {
                   borderRadius: 6,
                 }}
               />
+              <ViewModeToggle mode={viewMode} onCycle={cycleViewMode} style={toolBtnStyle} />
               {isEditor && (
                 <button
                   onClick={() => setEditing(!editing)}
@@ -363,6 +436,22 @@ export default function SystemDetailView() {
                 >
                   <LuPencil size={13} />
                   {editing ? t('systemDetail.done') : t('common.edit')}
+                </button>
+              )}
+              {isEditor && (
+                <button
+                  onClick={bulkMode ? bulk.exit : bulk.enter}
+                  style={{
+                    ...toolBtnStyle,
+                    color: bulkMode ? 'var(--gold)' : 'var(--text-dim)',
+                    outline: bulkMode ? '1px solid var(--gold-dim)' : 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <LuListChecks size={13} />
+                  {bulkMode ? t('systemDetail.done') : t('common.select')}
                 </button>
               )}
               <button
@@ -495,7 +584,15 @@ export default function SystemDetailView() {
 
       {/* Sort bar */}
       {!searchResults && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 16,
+            flexWrap: 'wrap',
+          }}
+        >
           <span style={{ fontSize: 13, color: 'var(--text-muted)', flexShrink: 0 }}>
             {t('common.sort')}
           </span>
@@ -556,7 +653,11 @@ export default function SystemDetailView() {
           {searchResults.results.map((r, i) => (
             <div
               key={i}
-              onClick={() => navigate(`/library/book/${r.id}?page=${r.page_number}`, { state: { from: window.location.pathname } })}
+              onClick={() =>
+                navigate(`/library/book/${r.id}?page=${r.page_number}`, {
+                  state: { from: window.location.pathname },
+                })
+              }
               style={{
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border)',
@@ -711,12 +812,25 @@ export default function SystemDetailView() {
                     if (!hasFolders) {
                       // No subfolders — render flat list
                       return (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={booksContainerStyle}>
                           {books.map((book) => (
-                            <div key={book.id}>
+                            <div
+                              key={book.id}
+                              style={
+                                !list && editingBookId === book.id
+                                  ? { gridColumn: '1 / -1' }
+                                  : undefined
+                              }
+                            >
                               <BookRow
                                 book={book}
-                                onOpen={() => navigate(`/library/book/${book.id}`, { state: { from: window.location.pathname } })}
+                                card={card}
+                                compact={compact}
+                                onOpen={() =>
+                                  navigate(`/library/book/${book.id}`, {
+                                    state: { from: window.location.pathname },
+                                  })
+                                }
                                 onEdit={
                                   isEditor
                                     ? () =>
@@ -724,6 +838,9 @@ export default function SystemDetailView() {
                                     : null
                                 }
                                 editing={editingBookId === book.id}
+                                bulkMode={bulkMode}
+                                selected={selectedBookIds.has(book.id)}
+                                onToggle={(mods) => toggleBookSelect(book.id, mods)}
                               />
                               {editingBookId === book.id && (
                                 <BookEditor
@@ -754,18 +871,26 @@ export default function SystemDetailView() {
                             // Ungrouped books (no subfolder) — render flat above the folder widgets
                             <div
                               key="__ungrouped__"
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: 8,
-                                marginBottom: 4,
-                              }}
+                              style={{ ...booksContainerStyle, marginBottom: 4 }}
                             >
                               {folderMap[''].map((book) => (
-                                <div key={book.id}>
+                                <div
+                                  key={book.id}
+                                  style={
+                                    !list && editingBookId === book.id
+                                      ? { gridColumn: '1 / -1' }
+                                      : undefined
+                                  }
+                                >
                                   <BookRow
                                     book={book}
-                                    onOpen={() => navigate(`/library/book/${book.id}`, { state: { from: window.location.pathname } })}
+                                    card={card}
+                                    compact={compact}
+                                    onOpen={() =>
+                                      navigate(`/library/book/${book.id}`, {
+                                        state: { from: window.location.pathname },
+                                      })
+                                    }
                                     onEdit={
                                       isEditor
                                         ? () =>
@@ -775,6 +900,9 @@ export default function SystemDetailView() {
                                         : null
                                     }
                                     editing={editingBookId === book.id}
+                                    bulkMode={bulkMode}
+                                    selected={selectedBookIds.has(book.id)}
+                                    onToggle={(mods) => toggleBookSelect(book.id, mods)}
                                   />
                                   {editingBookId === book.id && (
                                     <BookEditor
@@ -797,14 +925,25 @@ export default function SystemDetailView() {
                               books={folderMap[key]}
                               systemId={system.id}
                               category={cat}
+                              card={card}
+                              compact={compact}
+                              list={list}
+                              booksContainerStyle={booksContainerStyle}
                               collapsed={collapsedSubfolders}
                               onToggle={toggleSubfolder}
                               editingBookId={editingBookId}
                               setEditingBookId={setEditingBookId}
-                              onOpenBook={(book) => navigate(`/library/book/${book.id}`, { state: { from: window.location.pathname } })}
+                              onOpenBook={(book) =>
+                                navigate(`/library/book/${book.id}`, {
+                                  state: { from: window.location.pathname },
+                                })
+                              }
                               isEditor={isEditor}
                               onSaveBook={saveBook}
                               onDownload={setDownloadModal}
+                              bulkMode={bulkMode}
+                              selectedBookIds={selectedBookIds}
+                              onToggleBook={toggleBookSelect}
                             />
                           )
                         )}
@@ -827,6 +966,43 @@ export default function SystemDetailView() {
           title={downloadModal.title}
           params={downloadModal.params}
           onClose={() => setDownloadModal(null)}
+        />
+      )}
+
+      {bulkMode && (
+        <div style={{ position: 'sticky', bottom: 0, margin: '0 -40px', zIndex: 200 }}>
+          <BulkActionBar
+            count={totalSelected}
+            applying={bulkApplying}
+            onApplyTags={applyBulkTags}
+            onAddToCampaign={() => setShowAddToCampaign(true)}
+            onBulkEdit={() => setShowBulkEdit(true)}
+            onDone={bulk.exit}
+          />
+        </div>
+      )}
+
+      {showAddToCampaign && (
+        <AddToCampaignModal
+          items={selectedBookObjects().map((b) => ({ resource_type: 'book', resource_id: b.id }))}
+          onClose={() => setShowAddToCampaign(false)}
+          onAdded={() => {
+            setShowAddToCampaign(false)
+            bulk.exit()
+          }}
+        />
+      )}
+
+      {showBulkEdit && (
+        <BulkEditModal
+          type="book"
+          items={selectedBookObjects()}
+          onClose={() => setShowBulkEdit(false)}
+          onSaved={(edited) => {
+            applyBookEdits(edited)
+            setShowBulkEdit(false)
+            bulk.exit()
+          }}
         />
       )}
     </div>

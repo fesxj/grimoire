@@ -251,15 +251,20 @@ Files are stored on disk under `DATA_PATH/campaign_uploads/`. Banners are keyed 
 | `/api/campaigns/:id/members/:member_id/sheet` | POST | member (own) or owner | Upload/replace character sheet (multipart `file`) |
 | `/api/campaigns/:id/members/:member_id/sheet` | GET | member or owner | Download character sheet (original filename) |
 | `/api/campaigns/:id/members/:member_id/sheet` | DELETE | member (own) or owner | Remove character sheet |
+| `/api/campaigns/:id/members/:member_id/sheet/fields` | GET | member (own) or owner | Read a sheet's fillable PDF form fields (`{ fillable, fields: [{name, type, value, options?}] }`; `fillable: false` when not a form-fillable PDF) |
+| `/api/campaigns/:id/members/:member_id/sheet/fields` | PUT | member (own) or owner | Write form field values back into the sheet PDF (body `{ fields: {name: value} }`); returns the refreshed fields |
+| `/api/campaigns/:id/members/:member_id/sheet/duplicate` | POST | member (own) or owner | Copy a blank PDF into the member's sheet (body `{ source_type: "book"\|"file", source_id }`) |
+| `/api/campaigns/:id/sheet-sources` | GET | member or owner | List duplicatable blank sheets (`{ books, files }`): library `character-sheet` PDFs (filtered to the campaign's system when set) and campaign PDF files |
 
 #### Resources
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/api/campaigns/resources/search` | GET | any | Search books/maps/tokens by name. Query: `q`, `resource_type?`, `limit?` (default 30) |
+| `/api/campaigns/resources/search` | GET | any | Search books/maps/tokens. Books match on title (filter with `system_id?`); maps/tokens match on folder path first then filename, with the folder in `subtitle`. Query: `q`, `resource_type?`, `system_id?`, `limit?` (default 30) |
 | `/api/campaigns/resources/suggested/:system_id` | GET | any | Books in a game system for the create wizard. Core-category books are flagged `suggested` and ordered first. |
 | `/api/campaigns/:id/resources` | GET | member or owner | List linked resources (each with `visibility`, `category_id`, `sort_order`, `has_thumbnail`; owner items also include `shared_user_ids`). Ordered public → private → gm, then by `sort_order`. Players see only what their visibility allows. |
 | `/api/campaigns/:id/resources` | POST | owner | Link a resource. Body: `{resource_type, resource_id, visibility?, shared_user_ids?, category_id?}` |
+| `/api/campaigns/:id/resources/bulk` | POST | owner | Link many resources at once. Body: `{resources: [{resource_type, resource_id, visibility?, ...}]}`. Duplicates/unknown types are skipped; returns the rows created. |
 | `/api/campaigns/:id/resources/reorder` | PUT | owner | Drag-and-drop order. Body: `{ordered_ids}` |
 | `/api/campaigns/:id/resources/:res_id` | PATCH | owner | Update visibility/shares/category. Body: `{visibility?, shared_user_ids?, category_id?}` (each optional; `category_id: ""` clears it) |
 | `/api/campaigns/:id/resources/:res_id` | DELETE | owner | Unlink resource (deletes the underlying file for `file` resources) |
@@ -274,29 +279,33 @@ App-wide admin settings gate campaign file uploads (admins are exempt): `campaig
 
 #### Categories
 
-GM-defined groupings for wiki pages and resources, scoped per campaign by `kind` (`note` or `resource`); the two namespaces never mix. Wiki pages carry an optional `category_id` (null = Uncategorized); resources carry an optional `category_id` (null = grouped under their built-in type group: Books / Maps / Tokens). Set a category via the item's PATCH endpoint (`category_id`), using `""` to clear it.
+GM-defined groupings for linked **resources**, scoped per campaign. Resources carry an optional `category_id` (null = grouped under their built-in type group: Books / Maps / Tokens), set via the resource PATCH endpoint (`category_id`), using `""` to clear it. Wiki pages no longer use categories — they nest under parent pages instead (see Wiki). `kind` `note` is retired: `POST` with `kind: "note"` returns 400, and legacy note categories are converted to parent pages on startup.
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/api/campaigns/:id/categories` | GET | member or owner | List categories. Query: `kind?` (`note`\|`resource`) |
-| `/api/campaigns/:id/categories` | POST | owner | Create. Body: `{name, kind, icon?}` (`icon` = a Lucide icon name) |
+| `/api/campaigns/:id/categories` | GET | member or owner | List categories. Query: `kind?` (`resource`) |
+| `/api/campaigns/:id/categories` | POST | owner | Create. Body: `{name, kind, icon?}` (`kind` must be `resource`; `icon` = a Lucide icon name) |
 | `/api/campaigns/:id/categories/reorder` | PUT | owner | Set sort order. Body: `{ordered_ids}` |
 | `/api/campaigns/:id/categories/:cat_id` | PATCH | owner | Rename / set icon. Body: `{name?, icon?}` (`icon: ""` clears it) |
-| `/api/campaigns/:id/categories/:cat_id` | DELETE | owner | Delete. Query: `mode` = `uncategorize` (default; items kept, moved out of the category) or `delete_items` (wiki pages deleted, resources unlinked) |
+| `/api/campaigns/:id/categories/:cat_id` | DELETE | owner | Delete. Query: `mode` = `uncategorize` (default; resources kept, moved out of the category) or `delete_items` (resources unlinked) |
 
 #### Wiki (notes)
 
 The campaign notebook is a set of markdown **wiki pages**. Pages link to one another with `[[Page Title]]` (or `[[Page Title|label]]`) syntax and embed Grimoire content inline with `[[book:ID]]`, `[[book:ID:PAGE]]`, `[[map:ID]]`, or `[[token:ID]]`. On save the body is re-parsed: unknown `[[Page Title]]` targets auto-create a stub page (inheriting the source page's visibility), and backlink rows are rebuilt.
 
+Pages nest: each page has an optional `parent_id` (null = top level), forming a tree of arbitrary depth (a "category" is just a page with children). Deleting a page re-parents its children to the deleted page's parent rather than removing the subtree. A page may not be its own parent or be moved under one of its own descendants (400).
+
 Each page has a **visibility**: `gm` (owner only), `group` (all accepted members), or `members` (owner plus the users in `shared_user_ids`). The owner may create/edit/delete any page; a member may create `group` pages and edit/delete pages they authored, but cannot set `gm`/`members` visibility.
 
 | Endpoint | Method | Auth | Description |
 |----------|--------|------|-------------|
-| `/api/campaigns/:id/wiki` | GET | member or owner | List pages the caller can see (`id, title, slug, visibility, page_type, session_date, category_id, icon, sort_order, updated_at`), ordered by `sort_order` |
-| `/api/campaigns/:id/wiki` | POST | member or owner | Create a page. Body: `{title?, body?, visibility?, page_type?, session_date?, shared_user_ids?, category_id?, icon?}` (`icon` = a Lucide icon name) |
+| `/api/campaigns/:id/wiki` | GET | member or owner | List pages the caller can see (`id, title, slug, visibility, page_type, session_date, parent_id, icon, sort_order, updated_at, can_edit`), ordered by `sort_order`. Build the page tree client-side from `parent_id` |
+| `/api/campaigns/:id/wiki` | POST | member or owner | Create a page. Body: `{title?, body?, visibility?, page_type?, session_date?, shared_user_ids?, parent_id?, icon?}` (`parent_id` nests the page; `icon` = a Lucide icon name) |
 | `/api/campaigns/:id/wiki/search` | GET | member or owner | Search visible pages by title/body. Query: `q` |
 | `/api/campaigns/:id/wiki/titles` | GET | member or owner | `{title, slug}` list for `[[link]]` autocomplete |
 | `/api/campaigns/:id/wiki/reorder` | PUT | owner | Drag-and-drop order. Body: `{ordered_ids}` |
+| `/api/campaigns/:id/wiki/export` | GET | owner | Export all pages. Query: `format` = `md` (a `.zip` of one Markdown file per page, with YAML frontmatter incl. `parent` slug — Obsidian-friendly) or `json` (a Grimoire JSON bundle: `{grimoire_wiki_version, campaign, pages[]}`, each page carrying its `parent` slug). Returns a file download |
+| `/api/campaigns/:id/wiki/import` | POST | owner | Import pages from a multipart `file`. Accepts a single `.md`/`.markdown`/`.txt`, a Grimoire `.json` bundle, a LegendKeeper export (`.json`/`.lk` — a per-page export or a current `{version, resources[]}` bundle with ProseMirror bodies), or a `.zip` (Markdown vault, Grimoire bundle, or LegendKeeper directory export). LegendKeeper HTML and ProseMirror bodies are converted to Markdown (lossy for LegendKeeper-only blocks, which are dropped); page nesting (`parent`/`parentId`) is preserved. Import is non-destructive: every record becomes a new page (slugs de-duplicated), existing pages are never overwritten, and internal links are remapped. Returns `{imported, format, pages[]}` |
 | `/api/campaigns/:id/wiki/:page_id` | GET | per visibility | Page detail incl. `body`, `backlinks`, `shared_user_ids`, `icon`, `can_edit` |
 | `/api/campaigns/:id/wiki/:page_id` | PATCH | owner or page author | Update fields (each optional; `icon: ""` clears it) |
 | `/api/campaigns/:id/wiki/:page_id` | DELETE | owner or page author | Delete the page and its link rows |

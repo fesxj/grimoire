@@ -7,7 +7,6 @@ import {
   LuUsers,
   LuUser,
   LuLink,
-  LuChevronRight,
   LuMailOpen,
   LuCalendar,
   LuNotebook,
@@ -92,10 +91,10 @@ function CampaignCard({ campaign, onClick, onOpenNotes, userId, badgeLabel, subt
         overflow: 'hidden',
       }}
     >
-      {/* Banner header */}
+      {/* Banner header — 2:1 (wide:tall) aspect ratio */}
       <div
         style={{
-          height: 96,
+          aspectRatio: '2 / 1',
           background: 'var(--bg-deep)',
           borderBottom: '1px solid var(--border)',
           display: 'flex',
@@ -116,64 +115,74 @@ function CampaignCard({ campaign, onClick, onOpenNotes, userId, badgeLabel, subt
       </div>
 
       {/* Content */}
-      <div style={{ padding: '16px 18px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div
+      <div style={{ padding: '16px 18px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            marginBottom: 6,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              marginBottom: 6,
-              flexWrap: 'wrap',
+              fontSize: 17,
+              fontWeight: 600,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
+            {campaign.name}
+          </span>
+          {badgeLabel && <RoleBadge label={badgeLabel} />}
+          {campaign.parent_campaign_id && (
             <span
               style={{
-                fontSize: 17,
-                fontWeight: 600,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
+                fontSize: 11,
+                color: 'var(--text-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
               }}
             >
-              {campaign.name}
+              <LuLink size={11} aria-hidden="true" /> {t('campaigns.linkedToGmCampaign')}
             </span>
-            {badgeLabel && <RoleBadge label={badgeLabel} />}
-            {campaign.parent_campaign_id && (
-              <span
-                style={{
-                  fontSize: 11,
-                  color: 'var(--text-muted)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                <LuLink size={11} aria-hidden="true" /> {t('campaigns.linkedToGmCampaign')}
-              </span>
-            )}
-          </div>
-
-          {campaign.description && (
-            <div
-              // Scrollable markdown preview, capped near the banner height so a
-              // long description doesn't push the meta row (type/system/schedule)
-              // out of view. Clicks inside don't open the campaign.
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-              style={{
-                fontSize: 13,
-                color: 'var(--text-dim)',
-                lineHeight: 1.5,
-                maxHeight: 96,
-                overflowY: 'auto',
-                marginBottom: 10,
-              }}
-            >
-              <WikiMarkdown body={campaign.description} />
-            </div>
           )}
+        </div>
 
+        {/* Description, full width above the info + notes row. */}
+        {campaign.description && (
+          <div
+            // Scrollable markdown preview, capped near the banner height so a
+            // long description doesn't push the meta row (type/system/schedule)
+            // out of view. Clicks inside don't open the campaign.
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            style={{
+              fontSize: 13,
+              color: 'var(--text-dim)',
+              lineHeight: 1.5,
+              maxHeight: 96,
+              overflowY: 'auto',
+              marginBottom: 10,
+            }}
+          >
+            <WikiMarkdown body={campaign.description} />
+          </div>
+        )}
+
+        {/* Info (type/system/schedule) on the left, Notes button on the right. */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
           <div
             style={{
               display: 'flex',
@@ -181,6 +190,7 @@ function CampaignCard({ campaign, onClick, onOpenNotes, userId, badgeLabel, subt
               fontSize: 12,
               color: 'var(--text-muted)',
               flexWrap: 'wrap',
+              minWidth: 0,
             }}
           >
             {subtitle && (
@@ -206,7 +216,8 @@ function CampaignCard({ campaign, onClick, onOpenNotes, userId, badgeLabel, subt
             )}
           </div>
 
-          {/* Jump straight to this campaign's notes without opening the overview. */}
+          {/* Jump straight to this campaign's notes without opening the overview.
+              Matches the gold "Open Notes" action on the campaign overview page. */}
           <button
             type="button"
             onClick={(e) => {
@@ -216,26 +227,21 @@ function CampaignCard({ campaign, onClick, onOpenNotes, userId, badgeLabel, subt
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 5,
-              marginTop: 12,
-              padding: '5px 10px',
-              background: 'var(--bg-deep)',
-              border: '1px solid var(--border)',
-              borderRadius: 6,
-              color: 'var(--text-dim)',
+              gap: 6,
+              padding: '7px 14px',
+              background: 'var(--gold)',
+              border: 'none',
+              borderRadius: 8,
+              color: '#1a1209',
               cursor: 'pointer',
-              fontSize: 12,
+              fontSize: 13,
+              fontWeight: 600,
+              flexShrink: 0,
             }}
           >
-            <LuNotebook size={13} aria-hidden="true" /> {t('campaigns.openNotes')}
+            <LuNotebook size={15} aria-hidden="true" /> {t('campaigns.openNotes')}
           </button>
         </div>
-
-        <LuChevronRight
-          size={18}
-          color="var(--text-muted)"
-          style={{ flexShrink: 0, marginTop: 4 }}
-        />
       </div>
     </div>
   )

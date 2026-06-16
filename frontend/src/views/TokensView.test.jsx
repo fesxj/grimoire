@@ -102,8 +102,16 @@ describe('TokensView', () => {
   })
 
   it('favorites filter hides non-favorite tokens', async () => {
-    const favToken = makeToken({ id: 'fav-tok', filename: 'fav.png', relative_path: 'tokens/fav.png' })
-    const otherToken = makeToken({ id: 'other-tok', filename: 'other.png', relative_path: 'tokens/other.png' })
+    const favToken = makeToken({
+      id: 'fav-tok',
+      filename: 'fav.png',
+      relative_path: 'tokens/fav.png',
+    })
+    const otherToken = makeToken({
+      id: 'other-tok',
+      filename: 'other.png',
+      relative_path: 'tokens/other.png',
+    })
     setupTokens([favToken, otherToken])
     mockIsFavorite.mockImplementation((type, id) => type === 'token' && id === 'fav-tok')
 
@@ -117,8 +125,16 @@ describe('TokensView', () => {
   })
 
   it('toggling favorites off restores all tokens', async () => {
-    const favToken = makeToken({ id: 'fav-tok', filename: 'fav.png', relative_path: 'tokens/fav.png' })
-    const otherToken = makeToken({ id: 'other-tok', filename: 'other.png', relative_path: 'tokens/other.png' })
+    const favToken = makeToken({
+      id: 'fav-tok',
+      filename: 'fav.png',
+      relative_path: 'tokens/fav.png',
+    })
+    const otherToken = makeToken({
+      id: 'other-tok',
+      filename: 'other.png',
+      relative_path: 'tokens/other.png',
+    })
     setupTokens([favToken, otherToken])
     mockIsFavorite.mockImplementation((type, id) => type === 'token' && id === 'fav-tok')
 
@@ -145,9 +161,21 @@ describe('TokensView', () => {
   })
 
   it('text filter and favorites filter compose correctly', async () => {
-    const favToken = makeToken({ id: 'fav-tok', filename: 'dragon.png', relative_path: 'tokens/dragon.png' })
-    const otherFav = makeToken({ id: 'other-fav', filename: 'drake.png', relative_path: 'tokens/drake.png' })
-    const nonFav = makeToken({ id: 'non-fav', filename: 'goblin.png', relative_path: 'tokens/goblin.png' })
+    const favToken = makeToken({
+      id: 'fav-tok',
+      filename: 'dragon.png',
+      relative_path: 'tokens/dragon.png',
+    })
+    const otherFav = makeToken({
+      id: 'other-fav',
+      filename: 'drake.png',
+      relative_path: 'tokens/drake.png',
+    })
+    const nonFav = makeToken({
+      id: 'non-fav',
+      filename: 'goblin.png',
+      relative_path: 'tokens/goblin.png',
+    })
     setupTokens([favToken, otherFav, nonFav])
     mockIsFavorite.mockImplementation((type, id) => ['fav-tok', 'other-fav'].includes(id))
 

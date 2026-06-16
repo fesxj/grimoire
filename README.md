@@ -25,8 +25,10 @@ A Docker-based web application for managing your tabletop RPG PDF collection. Br
 - **Token Browser** — Browse and tag character tokens and portrait assets
 - **Bookmarks** — Per-user page and text-selection bookmarks with inline highlights
 - **Favorites** — Save systems, books, maps, and tokens for quick access
+- **View Modes** — Toggle the systems, books, maps, and tokens grids between card, compact, and list layouts; each content type remembers its own default (configurable in Account Settings) while the in-page toggle is a per-tab override. Cards and list rows include quick download and favorite buttons.
 - **Metadata Editor** — Add descriptions, tags, genre, publisher links, and character builder URLs
-- **Campaigns** — Track GM-run and personal campaigns; a markdown notes wiki with deep linking, character art and sheets, linked resources, and scheduling
+- **Bulk Actions** — Multi-select books, maps, and tokens (click, shift-click for a range, ⌘/Ctrl-click to toggle) then bulk tag, add to a campaign, or edit metadata via a carousel
+- **Campaigns** — Track GM-run and personal campaigns; a markdown notes wiki with deep linking, Markdown/JSON/LegendKeeper import & export, character art and sheets, linked resources, and scheduling
 - **OPDS Catalog** — Each user can generate a personal OPDS feed URL to connect e-reader apps directly to their library
 - **Docker Ready** — One command to run, mount your library directory, done
 - **Responsive** — Works on desktop, tablet, and phone with mobile navigation
@@ -540,7 +542,7 @@ Grimoire has a built-in campaign tracker with two modes:
 
 Campaign creation uses a short wizard: pick a system, then choose resources — the system's core books are suggested by default and anything can be added (with a search) or removed, each set to **Shared with players**, **GM only**, or **Private**. The campaign **description** supports markdown, and you can name a **custom game system** that isn't in your library (handy for keeping notes on a system you don't own).
 
-Campaign members can set a **character name** per campaign (editable by both the GM and the player), upload **character art** (shown as their avatar) and a **character sheet** (PDF or image). Users can also set a **display name** in Account Settings that appears in place of their username across the app.
+Campaign members can set a **character name** per campaign (editable by both the GM and the player), upload **character art** (shown as their avatar) and a **character sheet** (PDF or image). A player can also **create a sheet from a template** — duplicating a form-fillable PDF from the library's Character Sheets category (filtered to the campaign's system) or a campaign file — and **fill it in directly in the app**; the same in-app editing works for any form-fillable PDF a player uploads, so sheets can be updated as characters advance. Sheets can be downloaded at any time, and re-uploading prompts a warning (with an option to download the current version first) before the previous one is replaced. Users can also set a **display name** in Account Settings that appears in place of their username across the app.
 
 ### Per-user campaign access
 
@@ -558,11 +560,12 @@ Each campaign has a full-page markdown **wiki** (opened from the campaign overvi
 
 - **Markdown** with tables, images, and the usual formatting, edited side-by-side with a live preview.
 - **Visibility per page** — *GM only*, *all members*, or *specific members* (e.g. a secret shared with one player).
-- **Groups** — the GM can organize pages into custom groups (e.g. NPCs, Session Notes) in the sidebar.
+- **Nested pages** — organize the sidebar as a tree: any page can hold subpages, to any depth (a "category" is just a page with children). Drag pages to re-nest them, add a subpage from the parent row, and collapse/expand branches. Deleting a page lifts its subpages up to the parent rather than removing them.
 - **Page links** — write `[[Page Title]]` to link pages; missing targets are auto-created as stubs, and each page shows what links back to it.
 - **Grimoire embeds** — drop a book (optionally at a page), map, or token straight into a page.
+- **Import & export** (GM only) — export the whole wiki as a Markdown `.zip` (one file per page with YAML frontmatter — an Obsidian-style vault) or a JSON bundle, and import pages from Markdown, a Grimoire JSON bundle, or a **LegendKeeper** export (`.json`, `.lk`, or `.zip` — both the per-page export and the current `{version, resources}` bundle). LegendKeeper HTML and ProseMirror page bodies are converted to Markdown and the page hierarchy is preserved; LegendKeeper-only block types (e.g. secrets, embeds) are dropped, matching LegendKeeper's own export caveats. Imports are non-destructive — pages are always added, never overwritten.
 
-Existing session notes are automatically rolled into wiki pages (under a "Session Notes" group) the first time the new version starts; empty notes are discarded.
+Existing session notes are automatically rolled into wiki pages (nested under a "Session Notes" page) the first time the new version starts; empty notes are discarded.
 
 **Resources** — link books, maps, and tokens, or upload campaign files (handouts, etc.) the GM keeps with the campaign. Each resource has a visibility: **Public** (all players), **Private** (shared with specific players — e.g. a handout for 2 of 4), or **GM only**. Resources group under their type by default, but the GM can create custom categories (e.g. *Player Handouts*), drag items between categories and reorder them, and delete categories (keeping items uncategorized or unlinking them).
 

@@ -80,7 +80,8 @@
     "sizeMB": "{{size}} Mo",
     "sizeGB": "{{size}} Go",
     "addToFavorites": "Ajouter aux favoris",
-    "removeFromFavorites": "Retirer des favoris"
+    "removeFromFavorites": "Retirer des favoris",
+    "select": "Sélectionner"
   },
   "login": {
     "username": "Nom d'utilisateur",
@@ -117,7 +118,14 @@
     "bookCount_one": "{{count}} livre",
     "bookCount_other": "{{count}} livres",
     "agnosticTitle": "Indépendant du système",
-    "agnosticSubtitle": "Références, zines et livres non liés à un système de jeu particulier."
+    "agnosticSubtitle": "Références, zines et livres non liés à un système de jeu particulier.",
+    "viewMode": {
+      "card": "Cartes",
+      "compact": "Compact",
+      "list": "Liste",
+      "toggle": "Changer la vue",
+      "toggleWithMode": "Changer la vue (actuellement {{mode}})"
+    }
   },
   "systemDetail": {
     "backToLibrary": "Retour à la bibliothèque",
@@ -420,9 +428,13 @@
       "title": "Navigation dans la bibliothèque",
       "description": "Préférences d'affichage pour la bibliothèque, les cartes et les pions.",
       "sortOrder": "Ordre de tri",
-      "cardSize": "Taille des vignettes",
-      "comfortable": "Confortable",
-      "compact": "Compact"
+      "viewMode": "Vue par défaut",
+      "viewModeSystems": "Systèmes",
+      "viewModeBooks": "Livres",
+      "viewModeMaps": "Cartes",
+      "viewModeTokens": "Pions",
+      "recentLimit": "Livres récemment ouverts",
+      "recentLimitHint": "Nombre de livres récemment ouverts à mémoriser (0–{{max}}). Mettre 0 pour masquer la section."
     },
     "language": {
       "title": "Langue",
@@ -693,6 +705,8 @@
     "descriptionPlaceholder": "Une brève description de cette campagne…",
     "systemLabel": "Système de jeu",
     "systemNone": "— Aucun —",
+    "systemGroupFavorites": "Favoris",
+    "systemGroupAll": "Tous les systèmes",
     "gmTitleLabel": "Votre titre",
     "gmTitlePlaceholder": "Maître du Donjon, Meneur de Jeu, Narrateur…",
     "gmTitleHint": "Comment les joueurs voient votre rôle (ex. : Maître du Donjon, Gardien, Seigneur de Guerre)",
@@ -715,7 +729,13 @@
       "visibilityLabel": "Visibilité",
       "visShared": "Partagé avec les joueurs",
       "visGm": "MJ seulement",
-      "visPrivate": "Privé au propriétaire"
+      "visPrivate": "Privé au propriétaire",
+      "type_all": "Tous",
+      "type_book": "Livres",
+      "type_map": "Cartes",
+      "type_token": "Jetons",
+      "systemFilterLabel": "Filtrer par système de jeu",
+      "systemFilterAll": "Tous les systèmes"
     },
     "bannerLabel": "Bannière (optionnel)",
     "bannerChoose": "Choisir une image…",
@@ -744,7 +764,20 @@
     "removeSheet": "Retirer la fiche",
     "characterSheetLink": "Fiche de personnage (lien)",
     "linkSheet": "Ajouter un lien",
-    "sheetUrlPlaceholder": "https://… fiche ou PDF"
+    "sheetUrlPlaceholder": "https://… fiche ou PDF",
+    "editSheetInApp": "Modifier dans l'application",
+    "editSheetTitle": "Modifier la feuille de personnage",
+    "sheetNotFillable": "Ce PDF ne contient aucun champ de formulaire à remplir; il peut seulement être téléchargé, modifié à l’externe et téléversé de nouveau.",
+    "saving": "Enregistrement…",
+    "createFromTemplate": "Créer à partir d’un modèle",
+    "chooseTemplate": "Choisir un modèle",
+    "librarySheets": "Bibliothèque",
+    "campaignSheets": "Fichiers de campagne",
+    "noTemplates": "Aucune feuille remplissable n’est disponible. Ajoutez un PDF à la catégorie Feuilles de personnage de la bibliothèque ou téléversez-en un dans cette campagne.",
+    "replaceSheet": "Remplacer la feuille",
+    "replaceSheetWarning": "Le téléversement d’une nouvelle feuille remplace l’actuelle. La version précédente ne pourra pas être récupérée.",
+    "downloadCurrent": "Télécharger l’actuelle",
+    "replace": "Remplacer"
   },
   "sessions": {
     "title": "Notes de session",
@@ -1047,7 +1080,18 @@
     "uncategorized": "Non classé",
     "groupLabel": "Groupe",
     "emptyGroup": "Aucune page",
-    "iconLabel": "Icône"
+    "iconLabel": "Icône",
+    "export": "Exporter",
+    "exportMd": "Exporter en Markdown (.zip)",
+    "exportJson": "Exporter en JSON",
+    "import": "Importer",
+    "importTitle": "Importer des pages de wiki",
+    "importHint": "Ajoutez des pages depuis Markdown, un fichier JSON Grimoire ou un export LegendKeeper. Les pages existantes ne sont jamais écrasées.",
+    "importFormats": "Accepte .zip, .json, .md, .markdown ou .txt. Le HTML de LegendKeeper est converti en Markdown.",
+    "chooseFile": "Choisir un fichier",
+    "importing": "Importation…",
+    "imported": "{{count}} page importée",
+    "imported_other": "{{count}} pages importées"
   },
   "campaignNotes": {
     "backToOverview": "Retour à l'aperçu"
@@ -1069,5 +1113,38 @@
   "iconPicker": {
     "label": "Choisir une icône",
     "none": "Aucune icône"
+  },
+  "bulk": {
+    "hint": "Cliquez sur des éléments ou des dossiers pour les sélectionner. Maj-clic pour une plage, ⌘/Ctrl-clic pour basculer.",
+    "tagsPlaceholder": "Étiquettes à ajouter, séparées par des virgules…",
+    "addTags": "Ajouter des étiquettes",
+    "applying": "Application…",
+    "addToCampaign": "Ajouter à la campagne",
+    "edit": "Édition groupée"
+  },
+  "addToCampaign": {
+    "intro_one": "Ajouter 1 élément à une campagne que vous dirigez.",
+    "intro_other": "Ajouter {{count}} éléments à une campagne que vous dirigez.",
+    "campaignLabel": "Campagne",
+    "add": "Ajouter",
+    "noCampaigns": "Vous ne dirigez aucune campagne à laquelle ajouter des ressources."
+  },
+  "bulkEdit": {
+    "title_one": "Modifier 1 élément",
+    "title_other": "Modifier {{count}} éléments",
+    "position": "{{current}} sur {{total}}",
+    "saveAll": "Tout enregistrer",
+    "tagsPlaceholder": "Étiquettes séparées par des virgules",
+    "field_title": "Titre",
+    "field_category": "Catégorie",
+    "field_description": "Description",
+    "field_publisher": "Éditeur",
+    "field_year": "Année",
+    "field_tags": "Étiquettes",
+    "field_mapType": "Type de carte",
+    "field_gridSize": "Taille de grille",
+    "field_explicit": "Contenu explicite",
+    "previous": "Précédent",
+    "next": "Suivant"
   }
 }

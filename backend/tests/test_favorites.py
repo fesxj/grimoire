@@ -144,6 +144,20 @@ class TestFavoritesEnrichedShape:
         if book_items:
             assert all("index_failed" in i for i in book_items)
 
+    def test_system_cover_falls_back_to_a_book_thumbnail(self, client, admin_headers, fav_system):
+        # System has no explicit cover_book_id; a core book with a thumbnail
+        # should be used as the cover (matching the systems list behaviour).
+        cover = make_book(system_id=fav_system.id, category="core", has_thumbnail=True)
+        client.post(
+            "/api/favorites",
+            json={"item_type": "system", "item_id": fav_system.id},
+            headers=admin_headers,
+        )
+        resp = client.get("/api/favorites", headers=admin_headers)
+        system_items = [i for i in resp.json()["items"] if i.get("item_type") == "system"]
+        assert system_items
+        assert system_items[0]["cover_book_id"] == cover.id
+
 
 class TestFavoritesArePersisted:
     def test_added_book_appears_in_list(self, client, gm_headers, fav_book):

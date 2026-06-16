@@ -123,23 +123,34 @@ def rebuild_links(db, campaign, page: WikiPage, current_user: CurrentUser) -> No
         )
 
 
-def _resolve_category(db, campaign_id: str, category_id):
-    """Validate a note-category id for this campaign. Empty string clears it.
+def _resolve_parent(db, campaign_id: str, parent_id, page_id: str = None):
+    """Validate a parent-page id for this campaign. Empty string moves to root.
 
-    Returns the resolved id (or None), raising 400 if it's unknown or wrong-kind.
+    Returns the resolved id (or None), raising 400 if the parent is unknown, in a
+    different campaign, the page itself, or one of its own descendants (which would
+    create a cycle).
     """
-    from ...models import CampaignCategory
-
-    if category_id in (None, ""):
+    if parent_id in (None, ""):
         return None
-    cat = (
-        db.query(CampaignCategory)
-        .filter_by(id=category_id, campaign_id=campaign_id, kind="note")
-        .first()
+    parent = (
+        db.query(WikiPage).filter_by(id=parent_id, campaign_id=campaign_id).first()
     )
-    if not cat:
-        raise HTTPException(400, "Invalid category")
-    return cat.id
+    if not parent:
+        raise HTTPException(400, "Invalid parent page")
+    if page_id is not None:
+        if parent_id == page_id:
+            raise HTTPException(400, "A page cannot be its own parent")
+        # Walk up from the candidate parent; if we reach this page, it's a cycle.
+        seen = set()
+        cur = parent
+        while cur is not None and cur.parent_id:
+            if cur.parent_id == page_id:
+                raise HTTPException(400, "Cannot move a page under its own descendant")
+            if cur.parent_id in seen:
+                break  # defensive: pre-existing cycle, don't loop forever
+            seen.add(cur.parent_id)
+            cur = db.query(WikiPage).filter_by(id=cur.parent_id).first()
+    return parent.id
 
 
 def _page_summary(p: WikiPage) -> dict:
@@ -150,7 +161,7 @@ def _page_summary(p: WikiPage) -> dict:
         "visibility": p.visibility,
         "page_type": p.page_type,
         "session_date": p.session_date,
-        "category_id": p.category_id,
+        "parent_id": p.parent_id,
         "icon": p.icon,
         "sort_order": p.sort_order,
         "updated_at": p.updated_at.isoformat() if p.updated_at else None,
@@ -167,7 +178,10 @@ def list_pages(campaign_id: str, current_user: CurrentUser = Depends(get_current
         visible = [p for p in pages if can_view_page(p, c, current_user, db)]
         # Manual order first; fall back to title for pages never reordered.
         visible.sort(key=lambda p: (p.sort_order or 0, (p.title or "").lower()))
-        return [_page_summary(p) for p in visible]
+        return [
+            {**_page_summary(p), "can_edit": can_edit_page(p, c, current_user)}
+            for p in visible
+        ]
     finally:
         db.close()
 
@@ -236,7 +250,7 @@ def get_page(
             "visibility": page.visibility,
             "page_type": page.page_type,
             "session_date": page.session_date,
-            "category_id": page.category_id,
+            "parent_id": page.parent_id,
             "icon": page.icon,
             "created_by_id": page.created_by_id,
             "created_by_name": (author.display_name or author.username) if author else None,
@@ -283,7 +297,7 @@ def create_page(
             except ValueError:
                 raise HTTPException(400, "session_date must be YYYY-MM-DD")
 
-        category_id = _resolve_category(db, campaign_id, data.category_id)
+        parent_id = _resolve_parent(db, campaign_id, data.parent_id)
 
         page = WikiPage(
             campaign_id=campaign_id,
@@ -294,7 +308,7 @@ def create_page(
             page_type=data.page_type if data.page_type in ("note", "session") else "note",
             session_date=data.session_date,
             created_by_id=current_user.id,
-            category_id=category_id,
+            parent_id=parent_id,
             icon=(data.icon or None),
         )
         db.add(page)
@@ -344,8 +358,8 @@ def update_page(
             page.session_date = data.session_date or None
         if data.page_type is not None and data.page_type in ("note", "session"):
             page.page_type = data.page_type
-        if data.category_id is not None:
-            page.category_id = _resolve_category(db, campaign_id, data.category_id)
+        if data.parent_id is not None:
+            page.parent_id = _resolve_parent(db, campaign_id, data.parent_id, page_id=page.id)
         if data.icon is not None:
             page.icon = data.icon or None
 
@@ -375,6 +389,11 @@ def delete_page(
         # Owner deletes anything; a member may delete a page they authored.
         if c.owner_id != current_user.id and page.created_by_id != current_user.id:
             raise HTTPException(403, "Not authorised to delete this page")
+        # Re-parent any children to this page's parent so subtrees aren't orphaned
+        # (deleting a "category" page lifts its pages a level instead of nuking them).
+        db.query(WikiPage).filter_by(campaign_id=campaign_id, parent_id=page_id).update(
+            {WikiPage.parent_id: page.parent_id}, synchronize_session=False
+        )
         # Drop link rows referencing this page from either side.
         db.query(WikiPageLink).filter(
             (WikiPageLink.source_page_id == page_id)

@@ -345,9 +345,7 @@ describe('SystemDetailView — in-system search persistence', () => {
 
     await userEvent.type(screen.getByLabelText(/search within/i), 'fi')
 
-    await waitFor(() =>
-      expect(sessionStorage.getItem(SESSION_KEY)).toBe(JSON.stringify('fi'))
-    )
+    await waitFor(() => expect(sessionStorage.getItem(SESSION_KEY)).toBe(JSON.stringify('fi')))
   })
 
   it('re-runs the search on mount when a query is stored in sessionStorage', async () => {
@@ -376,5 +374,32 @@ describe('SystemDetailView — in-system search persistence', () => {
     await waitFor(() => screen.getByText('PHB'))
     const searchCalls = api.get.mock.calls.filter(([url]) => url.includes('/search'))
     expect(searchCalls).toHaveLength(0)
+  })
+})
+
+describe('SystemDetailView — book view mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    sessionStorage.clear()
+    localStorage.clear()
+    mockIsFavorite.mockReturnValue(false)
+  })
+
+  it('defaults books to list view and cycles list → card → compact via the toggle', async () => {
+    api.get.mockResolvedValue(makeSystem([makeBook({ title: 'PHB' })]))
+    renderView()
+    await waitFor(() => expect(screen.getByText('PHB')).toBeInTheDocument())
+
+    const toggle = screen.getByRole('button', { name: /change view/i })
+    expect(toggle).toHaveAccessibleName(/list/i)
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAccessibleName(/cards/i)
+    expect(sessionStorage.getItem('grimoire:view-mode:book')).toBe('card')
+
+    await userEvent.click(toggle)
+    expect(toggle).toHaveAccessibleName(/compact/i)
+    // Books still render in card/compact grid layouts.
+    expect(screen.getByText('PHB')).toBeInTheDocument()
   })
 })

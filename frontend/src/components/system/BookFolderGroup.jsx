@@ -34,9 +34,21 @@ export default function BookFolderGroup({
   isEditor,
   onSaveBook,
   onDownload,
+  bulkMode,
+  selectedBookIds,
+  onToggleBook,
+  card,
+  compact,
+  list,
+  booksContainerStyle,
 }) {
   const isCollapsed = collapsed.has(`${category}::${folder}`)
   const toggleKey = `${category}::${folder}`
+  const containerStyle = booksContainerStyle || {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  }
 
   return (
     <div
@@ -114,11 +126,16 @@ export default function BookFolderGroup({
 
       {/* Book list */}
       {!isCollapsed && (
-        <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ padding: '12px 16px', ...containerStyle }}>
           {books.map((book) => (
-            <div key={book.id}>
+            <div
+              key={book.id}
+              style={!list && editingBookId === book.id ? { gridColumn: '1 / -1' } : undefined}
+            >
               <BookRow
                 book={book}
+                card={card}
+                compact={compact}
                 onOpen={() => onOpenBook(book)}
                 onEdit={
                   isEditor
@@ -126,6 +143,9 @@ export default function BookFolderGroup({
                     : null
                 }
                 editing={editingBookId === book.id}
+                bulkMode={bulkMode}
+                selected={selectedBookIds?.has(book.id)}
+                onToggle={(mods) => onToggleBook(book.id, mods)}
               />
               {editingBookId === book.id && (
                 <BookEditor

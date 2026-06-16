@@ -5,7 +5,7 @@ import { CAMPAIGN_ICONS, CAMPAIGN_ICON_NAMES, CampaignIcon } from './campaignIco
 
 // Compact icon picker: a trigger button showing the current icon, opening a grid
 // of the curated Lucide set plus a "none" option. `value` is the stored name.
-export default function IconPicker({ value, onChange, fallback, ariaLabel }) {
+export default function IconPicker({ value, onChange, fallback, ariaLabel, compact }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
@@ -34,23 +34,23 @@ export default function IconPicker({ value, onChange, fallback, ariaLabel }) {
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 4,
-          padding: '6px 8px',
-          background: 'var(--bg-deep)',
-          border: '1px solid var(--border)',
+          gap: compact ? 1 : 4,
+          padding: compact ? '2px 3px' : '6px 8px',
+          background: compact ? 'transparent' : 'var(--bg-deep)',
+          border: compact ? '1px solid transparent' : '1px solid var(--border)',
           borderRadius: 6,
           color: 'var(--text-dim)',
           cursor: 'pointer',
         }}
       >
         {value ? (
-          <CampaignIcon name={value} size={15} />
+          <CampaignIcon name={value} size={compact ? 13 : 15} />
         ) : fallback ? (
           fallback
         ) : (
-          <LuBan size={15} aria-hidden="true" />
+          <LuBan size={compact ? 13 : 15} aria-hidden="true" />
         )}
-        <LuChevronDown size={12} aria-hidden="true" />
+        {!compact && <LuChevronDown size={12} aria-hidden="true" />}
       </button>
 
       {open && (

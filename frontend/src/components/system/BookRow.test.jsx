@@ -66,14 +66,18 @@ describe('BookRow', () => {
   })
 
   it('does not show "Indexed" badge for image-only PDFs', () => {
-    render(<BookRow book={makeBook({ indexed: true, index_error: 'image-only' })} onOpen={() => {}} />)
+    render(
+      <BookRow book={makeBook({ indexed: true, index_error: 'image-only' })} onOpen={() => {}} />
+    )
     expect(screen.queryByText('Indexed')).not.toBeInTheDocument()
   })
 
   // --- image-only badge ---
 
   it('shows "Image Only" badge when indexed and index_error is image-only', () => {
-    render(<BookRow book={makeBook({ indexed: true, index_error: 'image-only' })} onOpen={() => {}} />)
+    render(
+      <BookRow book={makeBook({ indexed: true, index_error: 'image-only' })} onOpen={() => {}} />
+    )
     expect(screen.getByText('Image Only')).toBeInTheDocument()
   })
 
@@ -83,7 +87,9 @@ describe('BookRow', () => {
   })
 
   it('"Image Only" badge has the correct tooltip', () => {
-    render(<BookRow book={makeBook({ indexed: true, index_error: 'image-only' })} onOpen={() => {}} />)
+    render(
+      <BookRow book={makeBook({ indexed: true, index_error: 'image-only' })} onOpen={() => {}} />
+    )
     const badge = screen.getByText('Image Only')
     expect(badge.title).toBe('This PDF contains only scanned images — no text layer to search')
   })
@@ -158,5 +164,31 @@ describe('BookRow', () => {
   it('does not show 18+ badge when is_explicit is false', () => {
     render(<BookRow book={makeBook({ is_explicit: false })} onOpen={() => {}} />)
     expect(screen.queryByText('18+')).not.toBeInTheDocument()
+  })
+
+  // --- download button ---
+
+  it('renders a download link pointing at the book file', () => {
+    render(<BookRow book={makeBook({ id: 'book-42' })} onOpen={() => {}} />)
+    const link = screen.getByRole('link', { name: /download/i })
+    expect(link).toHaveAttribute('href', 'http://localhost/books/book-42/file')
+    expect(link).toHaveAttribute('download')
+  })
+
+  it('does not render the download link in bulk mode', () => {
+    render(<BookRow book={makeBook()} onOpen={() => {}} bulkMode onToggle={() => {}} />)
+    expect(screen.queryByRole('link', { name: /download/i })).not.toBeInTheDocument()
+  })
+
+  // --- card variant ---
+
+  it('renders the edit button in the card body when card view is active', () => {
+    render(<BookRow book={makeBook()} onOpen={() => {}} onEdit={() => {}} card />)
+    expect(screen.getByRole('button', { name: /edit/i })).toBeInTheDocument()
+    // The download + favorite actions are overlaid on the thumbnail (like maps/tokens).
+    expect(screen.getByRole('link', { name: /download/i })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /add to favorites|remove from favorites/i })
+    ).toBeInTheDocument()
   })
 })

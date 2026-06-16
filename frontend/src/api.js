@@ -80,12 +80,12 @@ export const campaigns = {
   // GM-uploaded campaign files (linked as resource_type='file')
   uploadFile: (id, file) => api.upload(`/campaigns/${id}/files`, file),
   fileUrl: (id, fileId) => mediaUrl(`/campaigns/${id}/files/${fileId}`),
-  searchResources: (q = '', resourceType = '', systemId = '') => {
+  searchResources: (q = '', resourceType = '', systemId = '', limit = 40) => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
     if (resourceType) params.set('resource_type', resourceType)
     if (systemId) params.set('system_id', systemId)
-    params.set('limit', '40')
+    params.set('limit', String(limit))
     return api.get(`/campaigns/resources/search?${params.toString()}`)
   },
 

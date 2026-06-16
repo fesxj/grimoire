@@ -6,9 +6,10 @@ import {
   LuBookOpen,
   LuMap,
   LuUser,
-  LuPlus,
   LuTrash2,
   LuChevronLeft,
+  LuChevronDown,
+  LuChevronRight,
   LuImagePlus,
 } from 'react-icons/lu'
 import api, { campaigns } from '../../api'
@@ -25,131 +26,230 @@ function resourceKey(r) {
 
 const RESOURCE_TYPES = ['', 'book', 'map', 'token']
 
+// One collapsible folder/category section in the resource browser.
+function ResourceGroup({ groupKey, label, Icon, rows, open, onToggle, selectedKeys, toggleRow }) {
+  const selectedCount = rows.filter((r) => selectedKeys.has(resourceKey(r))).length
+  return (
+    <div style={resGroup}>
+      <button type="button" onClick={() => onToggle(groupKey)} style={resGroupHeader}>
+        {open ? <LuChevronDown size={14} /> : <LuChevronRight size={14} />}
+        <Icon size={13} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+        <span style={{ flex: 1, textAlign: 'left', ...ellipsis }}>{label}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>
+          {selectedCount > 0 ? `${selectedCount}/${rows.length}` : rows.length}
+        </span>
+      </button>
+      {open && (
+        <div>
+          {rows.map((r) => {
+            const checked = selectedKeys.has(resourceKey(r))
+            return (
+              <label key={resourceKey(r)} style={resRow(checked)}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleRow(r)}
+                  style={{ width: 15, height: 15, flexShrink: 0, cursor: 'pointer' }}
+                />
+                <span style={{ flex: 1, minWidth: 0, ...ellipsis }}>{r.name}</span>
+              </label>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ResourcePickerStep({ systemId, selected, setSelected }) {
   const { t } = useTranslation()
-  const { isFavorite } = useFavorites()
-  const [suggested, setSuggested] = useState([])
+  // All available resources (loaded once), grouped client-side by folder/category.
+  const [all, setAll] = useState(null)
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
-  const [searching, setSearching] = useState(false)
   const [typeFilter, setTypeFilter] = useState('')
-  // Default the system filter to the campaign's system when it's a real id.
-  const [systemFilter, setSystemFilter] = useState(systemId || '')
-  const [systems, setSystems] = useState([])
-  const debounceRef = useRef(null)
+  const [openGroups, setOpenGroups] = useState(() => new Set())
 
+  // Load the campaign system's books plus every map and token, once. Empty query
+  // returns the full set per type; we group and filter locally for a snappy,
+  // folder-style browser without per-keystroke requests.
   useEffect(() => {
-    api
-      .get('/systems')
-      .then((data) => setSystems(data || []))
-      .catch(() => {})
-  }, [])
-
-  // The system filter only applies to book searches.
-  const systemFilterActive = typeFilter === '' || typeFilter === 'book'
-
-  // Load suggested resources for the chosen system and pre-select core books (shared).
-  useEffect(() => {
-    if (!systemId) {
-      setSuggested([])
-      return
-    }
-    campaigns
-      .suggestedResources(systemId)
-      .then((data) => {
-        setSuggested(data || [])
-        setSelected((prev) => {
-          // Only seed defaults the first time (when nothing is selected yet).
-          if (prev.length > 0) return prev
-          return (data || [])
-            .filter((r) => r.suggested)
-            .map((r) => ({
-              resource_type: r.resource_type,
-              resource_id: r.resource_id,
-              name: r.name,
-              visibility: 'public',
-            }))
-        })
+    let cancelled = false
+    Promise.all([
+      campaigns.searchResources('', 'book', systemId || '', 1000),
+      campaigns.searchResources('', 'map', '', 1000),
+      campaigns.searchResources('', 'token', '', 1000),
+    ])
+      .then(([books, maps, tokens]) => {
+        if (cancelled) return
+        setAll([...(books || []), ...(maps || []), ...(tokens || [])])
       })
-      .catch(() => setSuggested([]))
-  }, [systemId, setSelected])
-
-  useEffect(() => {
-    if (!query.trim()) {
-      setResults([])
-      return
+      .catch(() => !cancelled && setAll([]))
+    return () => {
+      cancelled = true
     }
-    clearTimeout(debounceRef.current)
-    setSearching(true)
-    const sys = systemFilterActive ? systemFilter : ''
-    debounceRef.current = setTimeout(() => {
-      campaigns
-        .searchResources(query.trim(), typeFilter, sys)
-        .then((data) => setResults(data || []))
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false))
-    }, 250)
-    return () => clearTimeout(debounceRef.current)
-  }, [query, typeFilter, systemFilter, systemFilterActive])
+  }, [systemId])
+
+  // Pre-select core books for the campaign's system the first time resources load.
+  useEffect(() => {
+    if (!all || !systemId) return
+    setSelected((prev) => {
+      if (prev.length > 0) return prev
+      return all
+        .filter((r) => r.resource_type === 'book' && r.subtitle === 'core')
+        .map((r) => ({
+          resource_type: r.resource_type,
+          resource_id: r.resource_id,
+          name: r.name,
+          visibility: 'public',
+        }))
+    })
+  }, [all, systemId, setSelected])
 
   const selectedKeys = new Set(selected.map(resourceKey))
 
-  const add = (r) => {
-    if (selectedKeys.has(resourceKey(r))) return
-    setSelected((prev) => [
-      ...prev,
-      {
-        resource_type: r.resource_type,
-        resource_id: r.resource_id,
-        name: r.name,
-        visibility: 'public',
-      },
-    ])
+  const toggleRow = (r) => {
+    setSelected((prev) => {
+      const key = resourceKey(r)
+      if (prev.some((s) => resourceKey(s) === key)) {
+        return prev.filter((s) => resourceKey(s) !== key)
+      }
+      return [
+        ...prev,
+        {
+          resource_type: r.resource_type,
+          resource_id: r.resource_id,
+          name: r.name,
+          visibility: 'public',
+        },
+      ]
+    })
   }
 
-  const remove = (r) => {
-    setSelected((prev) => prev.filter((s) => resourceKey(s) !== resourceKey(r)))
-  }
-
-  const setVisibility = (r, visibility) => {
+  const setVisibility = (r, visibility) =>
     setSelected((prev) =>
       prev.map((s) => (resourceKey(s) === resourceKey(r) ? { ...s, visibility } : s))
     )
+
+  const q = query.trim().toLowerCase()
+
+  // Filter by type tab + search, then group by resource_type + subtitle (the
+  // book category or the map/token folder path).
+  const groups = []
+  if (all) {
+    const byKey = new Map()
+    for (const r of all) {
+      if (typeFilter && r.resource_type !== typeFilter) continue
+      if (q && !r.name.toLowerCase().includes(q) && !(r.subtitle || '').toLowerCase().includes(q))
+        continue
+      const folder = r.subtitle || t('campaignEditor.resources.ungrouped')
+      const groupKey = `${r.resource_type}:::${folder}`
+      if (!byKey.has(groupKey)) {
+        byKey.set(groupKey, {
+          groupKey,
+          type: r.resource_type,
+          label: folder,
+          Icon: TYPE_ICON[r.resource_type] || LuBookOpen,
+          rows: [],
+        })
+      }
+      byKey.get(groupKey).rows.push(r)
+    }
+    // Books first, then maps, then tokens; folders alphabetical within a type.
+    const order = { book: 0, map: 1, token: 2 }
+    groups.push(
+      ...[...byKey.values()].sort(
+        (a, b) => order[a.type] - order[b.type] || a.label.localeCompare(b.label)
+      )
+    )
   }
 
-  const suggestedUnselected = suggested.filter((r) => !selectedKeys.has(resourceKey(r)))
+  // While searching, expand every matching group so hits are visible.
+  const isOpen = (key) => (q ? true : openGroups.has(key))
+  const toggleGroup = (key) =>
+    setOpenGroups((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
 
   return (
     <div>
-      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 0, marginBottom: 16 }}>
+      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 0, marginBottom: 12 }}>
         {t('campaignEditor.resources.intro')}
       </p>
 
-      {/* Selected resources */}
-      <div style={{ marginBottom: 18 }}>
-        <div style={sectionLabel}>{t('campaignEditor.resources.selected')}</div>
-        {selected.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '6px 0' }}>
-            {t('campaignEditor.resources.none')}
+      {/* Type tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+        {RESOURCE_TYPES.map((type) => (
+          <button
+            key={type || 'all'}
+            type="button"
+            onClick={() => setTypeFilter(type)}
+            style={typeTab(typeFilter === type)}
+          >
+            {t(`campaignEditor.resources.type_${type || 'all'}`)}
+          </button>
+        ))}
+      </div>
+
+      {/* Search */}
+      <div style={{ position: 'relative', marginBottom: 10 }}>
+        <LuSearch
+          size={14}
+          style={{
+            position: 'absolute',
+            left: 10,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: 'var(--text-muted)',
+          }}
+        />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={t('campaignEditor.resources.searchPlaceholder')}
+          style={{ ...inputStyle, paddingLeft: 32 }}
+        />
+      </div>
+
+      {/* Folder browser */}
+      <div style={browserBox}>
+        {all === null ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}>
+            <Spinner size={18} />
           </div>
+        ) : groups.length === 0 ? (
+          <div style={resultEmpty}>{t('common.noResults')}</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          groups.map((g) => (
+            <ResourceGroup
+              key={g.groupKey}
+              groupKey={g.groupKey}
+              label={g.label}
+              Icon={g.Icon}
+              rows={g.rows}
+              open={isOpen(g.groupKey)}
+              onToggle={toggleGroup}
+              selectedKeys={selectedKeys}
+              toggleRow={toggleRow}
+            />
+          ))
+        )}
+      </div>
+
+      {/* Selected summary with inline visibility */}
+      <div style={{ marginTop: 14 }}>
+        <div style={sectionLabel}>
+          {t('campaignEditor.resources.selectedCount', { count: selected.length })}
+        </div>
+        {selected.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
             {selected.map((r) => {
               const Icon = TYPE_ICON[r.resource_type] || LuBookOpen
               return (
                 <div key={resourceKey(r)} style={selectedRow}>
                   <Icon size={14} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
-                  <span
-                    style={{
-                      flex: 1,
-                      fontSize: 13,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {r.name}
-                  </span>
+                  <span style={{ flex: 1, fontSize: 13, ...ellipsis }}>{r.name}</span>
                   <select
                     value={r.visibility}
                     onChange={(e) => setVisibility(r, e.target.value)}
@@ -162,7 +262,7 @@ function ResourcePickerStep({ systemId, selected, setSelected }) {
                   </select>
                   <button
                     type="button"
-                    onClick={() => remove(r)}
+                    onClick={() => toggleRow(r)}
                     aria-label={t('common.remove')}
                     style={iconBtn('var(--danger)')}
                   >
@@ -174,141 +274,6 @@ function ResourcePickerStep({ systemId, selected, setSelected }) {
           </div>
         )}
       </div>
-
-      {/* Search to add more */}
-      <div style={{ marginBottom: 14 }}>
-        {/* Resource-type segmented control */}
-        <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-          {RESOURCE_TYPES.map((type) => (
-            <button
-              key={type || 'all'}
-              type="button"
-              onClick={() => setTypeFilter(type)}
-              style={typeTab(typeFilter === type)}
-            >
-              {t(`campaignEditor.resources.type_${type || 'all'}`)}
-            </button>
-          ))}
-        </div>
-
-        {/* System filter (books only) */}
-        {systemFilterActive && (
-          <select
-            value={systemFilter}
-            onChange={(e) => setSystemFilter(e.target.value)}
-            aria-label={t('campaignEditor.resources.systemFilterLabel')}
-            style={{ ...inputStyle, appearance: 'auto', marginBottom: 8 }}
-          >
-            <option value="">{t('campaignEditor.resources.systemFilterAll')}</option>
-            {systems
-              .slice()
-              .sort((a, b) => {
-                // Campaign's system first, then favorites, then name.
-                if (a.id === systemId) return -1
-                if (b.id === systemId) return 1
-                const fa = isFavorite('system', a.id)
-                const fb = isFavorite('system', b.id)
-                if (fa !== fb) return fa ? -1 : 1
-                return a.name.localeCompare(b.name)
-              })
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.id === systemId ? `★ ${s.name}` : s.name}
-                </option>
-              ))}
-          </select>
-        )}
-
-        <div style={{ position: 'relative' }}>
-          <LuSearch
-            size={14}
-            style={{
-              position: 'absolute',
-              left: 10,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--text-muted)',
-            }}
-          />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('campaignEditor.resources.searchPlaceholder')}
-            style={{ ...inputStyle, paddingLeft: 32 }}
-          />
-        </div>
-        {query.trim() && (
-          <div style={resultsBox}>
-            {searching ? (
-              <div style={resultEmpty}>{t('common.loading')}</div>
-            ) : results.length === 0 ? (
-              <div style={resultEmpty}>{t('common.noResults')}</div>
-            ) : (
-              results.map((r) => {
-                const Icon = TYPE_ICON[r.resource_type] || LuBookOpen
-                const already = selectedKeys.has(resourceKey(r))
-                return (
-                  <button
-                    type="button"
-                    key={resourceKey(r)}
-                    onClick={() => add(r)}
-                    disabled={already}
-                    style={resultRow(already)}
-                  >
-                    <Icon size={14} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
-                    <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-                      <span
-                        style={{
-                          display: 'block',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {r.name}
-                      </span>
-                      {r.subtitle && (
-                        <span
-                          style={{
-                            display: 'block',
-                            fontSize: 11,
-                            color: 'var(--text-muted)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {r.subtitle}
-                        </span>
-                      )}
-                    </span>
-                    {!already && <LuPlus size={14} style={{ color: 'var(--gold)' }} />}
-                  </button>
-                )
-              })
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Suggested (system books) not yet selected */}
-      {suggestedUnselected.length > 0 && (
-        <div>
-          <div style={sectionLabel}>{t('campaignEditor.resources.suggested')}</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {suggestedUnselected.map((r) => (
-              <button
-                type="button"
-                key={resourceKey(r)}
-                onClick={() => add(r)}
-                style={suggestedChip}
-              >
-                <LuPlus size={12} /> {r.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -1038,31 +1003,48 @@ const iconBtn = (color) => ({
   padding: 2,
   flexShrink: 0,
 })
-const resultsBox = {
-  marginTop: 6,
-  border: '1px solid var(--border)',
-  borderRadius: 8,
-  background: 'var(--bg-deep)',
-  maxHeight: 220,
-  overflowY: 'auto',
-}
 const resultEmpty = {
   fontSize: 13,
   color: 'var(--text-muted)',
   padding: '10px 12px',
 }
-const resultRow = (disabled) => ({
+const ellipsis = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
+const browserBox = {
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  background: 'var(--bg-deep)',
+  maxHeight: 300,
+  overflowY: 'auto',
+}
+const resGroup = {
+  borderBottom: '1px solid var(--border)',
+}
+const resGroupHeader = {
   display: 'flex',
   alignItems: 'center',
   gap: 8,
   width: '100%',
-  padding: '8px 12px',
+  padding: '8px 10px',
   background: 'none',
   border: 'none',
-  borderBottom: '1px solid var(--border)',
-  color: disabled ? 'var(--text-muted)' : 'var(--text)',
-  cursor: disabled ? 'default' : 'pointer',
+  color: 'var(--text)',
+  cursor: 'pointer',
   fontSize: 13,
+  fontWeight: 500,
+}
+const resRow = (checked) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '6px 10px 6px 30px',
+  fontSize: 13,
+  cursor: 'pointer',
+  color: checked ? 'var(--text)' : 'var(--text-dim)',
+  background: checked ? 'rgba(201,168,76,0.08)' : 'transparent',
 })
 const typeTab = (active) => ({
   flex: 1,
@@ -1074,15 +1056,3 @@ const typeTab = (active) => ({
   background: active ? 'rgba(201,168,76,0.15)' : 'var(--bg-deep)',
   color: active ? 'var(--gold)' : 'var(--text-dim)',
 })
-const suggestedChip = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 4,
-  padding: '5px 10px',
-  background: 'var(--bg-deep)',
-  border: '1px solid var(--border)',
-  borderRadius: 16,
-  color: 'var(--text-dim)',
-  cursor: 'pointer',
-  fontSize: 12,
-}

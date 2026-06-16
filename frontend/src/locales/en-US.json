@@ -721,8 +721,10 @@
     "stepIndicator": "Step {{current}} of {{total}}",
     "resources": {
       "title": "Resources",
-      "intro": "Resources are optional. Core books are suggested for the chosen system — add or remove any, and set who can see each.",
+      "intro": "Resources are optional. Browse your library by folder and check what to include — core books are pre-selected for the chosen system.",
       "selected": "Selected",
+      "selectedCount": "Selected ({{count}})",
+      "ungrouped": "Other",
       "none": "No resources selected.",
       "suggested": "Suggested",
       "searchPlaceholder": "Search books, maps, and tokens…",

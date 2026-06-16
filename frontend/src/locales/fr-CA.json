@@ -721,8 +721,10 @@
     "stepIndicator": "Étape {{current}} sur {{total}}",
     "resources": {
       "title": "Ressources",
-      "intro": "Les ressources sont optionnelles. Les livres de base sont suggérés pour le système choisi — ajoutez-en ou retirez-en, et définissez qui peut voir chacune.",
+      "intro": "Les ressources sont optionnelles. Parcourez votre bibliothèque par dossier et cochez ce qu'il faut inclure — les livres de base sont présélectionnés pour le système choisi.",
       "selected": "Sélectionnées",
+      "selectedCount": "Sélectionnées ({{count}})",
+      "ungrouped": "Autres",
       "none": "Aucune ressource sélectionnée.",
       "suggested": "Suggérées",
       "searchPlaceholder": "Rechercher livres, cartes et jetons…",

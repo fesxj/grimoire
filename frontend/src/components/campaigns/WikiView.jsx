@@ -20,6 +20,12 @@ import {
   LuChevronRight,
   LuChevronDown,
   LuCheck,
+  LuBold,
+  LuItalic,
+  LuStrikethrough,
+  LuHeading,
+  LuList,
+  LuQuote,
 } from 'react-icons/lu'
 import { campaigns } from '../../api'
 import Spinner from '../Spinner'
@@ -368,6 +374,30 @@ function PageEditor({ campaign, isOwner, page, allPages, defaultParentId, onSave
     [body]
   )
 
+  // Prefix each line touched by the selection with `marker` (e.g. "# ", "- ",
+  // "> "). With nothing selected the current line is prefixed. Toggling off when
+  // every touched line already has the marker keeps the buttons idempotent.
+  const prefixLines = useCallback(
+    (marker) => {
+      const ta = bodyRef.current
+      const start = ta?.selectionStart ?? body.length
+      const end = ta?.selectionEnd ?? body.length
+      const lineStart = body.lastIndexOf('\n', start - 1) + 1
+      let lineEnd = body.indexOf('\n', end)
+      if (lineEnd === -1) lineEnd = body.length
+      const block = body.slice(lineStart, lineEnd)
+      const lines = block.split('\n')
+      const allMarked = lines.every((l) => l.startsWith(marker))
+      const next = lines.map((l) => (allMarked ? l.slice(marker.length) : marker + l)).join('\n')
+      setBody((b) => b.slice(0, lineStart) + next + b.slice(lineEnd))
+      requestAnimationFrame(() => {
+        ta?.focus()
+        ta?.setSelectionRange(lineStart, lineStart + next.length)
+      })
+    },
+    [body]
+  )
+
   const save = async () => {
     setSaving(true)
     setError(null)
@@ -451,6 +481,63 @@ function PageEditor({ campaign, isOwner, page, allPages, defaultParentId, onSave
             </option>
           ))}
         </select>
+
+        <span style={toolbarGroup}>
+          <button
+            type="button"
+            onClick={() => wrapSelection('**', '**')}
+            title={t('wiki.bold')}
+            aria-label={t('wiki.bold')}
+            style={iconBtn}
+          >
+            <LuBold size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => wrapSelection('_', '_')}
+            title={t('wiki.italic')}
+            aria-label={t('wiki.italic')}
+            style={iconBtn}
+          >
+            <LuItalic size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => wrapSelection('~~', '~~')}
+            title={t('wiki.strikethrough')}
+            aria-label={t('wiki.strikethrough')}
+            style={iconBtn}
+          >
+            <LuStrikethrough size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => prefixLines('## ')}
+            title={t('wiki.heading')}
+            aria-label={t('wiki.heading')}
+            style={iconBtn}
+          >
+            <LuHeading size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => prefixLines('- ')}
+            title={t('wiki.bulletList')}
+            aria-label={t('wiki.bulletList')}
+            style={iconBtn}
+          >
+            <LuList size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={() => prefixLines('> ')}
+            title={t('wiki.quote')}
+            aria-label={t('wiki.quote')}
+            style={iconBtn}
+          >
+            <LuQuote size={14} />
+          </button>
+        </span>
 
         <button type="button" onClick={() => insertAtCursor('[[]]')} style={toolbarBtn}>
           <LuLink2 size={13} /> {t('wiki.insertLink')}
@@ -603,6 +690,8 @@ export default function WikiView({ campaign, isOwner }) {
   // Ids of parent pages whose children are collapsed in the sidebar tree.
   const [collapsed, setCollapsed] = useState(() => new Set())
   const dragId = useRef(null)
+  // Live drop indicator: { id, where: 'before' | 'after' | 'inside' }.
+  const [dropTarget, setDropTarget] = useState(null)
 
   const exportWiki = async (format) => {
     try {
@@ -711,35 +800,110 @@ export default function WikiView({ campaign, isOwner }) {
     setSelectedId(null)
   }
 
-  // --- Drag to reparent / reorder pages (owner only) ---
+  // The pages in their current sidebar display order (depth-first, siblings by
+  // sort_order then title) — the basis for computing a new manual order on drop.
+  const orderedSiblings = (parentId) =>
+    pages
+      .filter((p) => (p.parent_id || null) === (parentId || null))
+      .sort(
+        (a, b) =>
+          (a.sort_order || 0) - (b.sort_order || 0) || (a.title || '').localeCompare(b.title || '')
+      )
+
+  // Depth-first walk producing the full ordered id list, used as the payload for
+  // the reorder endpoint (sort_order is global, so we persist the whole order).
+  const flattenOrder = (siblingsByParent) => {
+    const out = []
+    const walk = (parentId) => {
+      for (const p of siblingsByParent(parentId)) {
+        out.push(p.id)
+        walk(p.id)
+      }
+    }
+    walk(null)
+    return out
+  }
+
+  // --- Drag to reorder / reparent pages (owner only) ---
   const onPageDragStart = (e, id) => {
     dragId.current = id
-    e.dataTransfer.effectAllowed = 'move'
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
   }
-  // Drop onto the top-level zone: move the dragged page to the root.
+
+  // Classify the pointer within a row: top/bottom thirds reorder as a sibling
+  // before/after the target; the middle third nests under it.
+  const dropZone = (e) => {
+    const r = e.currentTarget.getBoundingClientRect()
+    const y = e.clientY - r.top
+    if (y < r.height / 3) return 'before'
+    if (y > (r.height * 2) / 3) return 'after'
+    return 'inside'
+  }
+
+  const onPageDragOver = (e, target) => {
+    e.preventDefault()
+    const id = dragId.current
+    if (!id || id === target.id) return
+    setDropTarget({ id: target.id, where: dropZone(e) })
+  }
+
+  // Drop onto the top-level zone: move the dragged page to the root (end of list).
   const onDropOnRoot = async () => {
     const id = dragId.current
     dragId.current = null
+    setDropTarget(null)
     if (!id) return
     const dragged = pages.find((p) => p.id === id)
-    if (dragged && dragged.parent_id) {
+    if (!dragged) return
+    if (dragged.parent_id) {
       await campaigns.updateWikiPage(campaign.id, id, { parent_id: '' })
-      loadList()
     }
+    // Reorder to the end of the root list.
+    const order = flattenOrder((pid) =>
+      orderedSiblings(pid)
+        .filter((p) => p.id !== id)
+        .concat(pid === null ? [dragged] : [])
+    )
+    await campaigns.reorderWikiPages(campaign.id, order)
+    loadList()
   }
-  // Drop onto a page: nest the dragged page under it (no-op if that would create
-  // a cycle — the server rejects it, but we guard client-side too).
+
+  // Drop onto a page: nest under it (middle) or place as a sibling before/after.
+  // No-op if it would create a cycle (the server guards too).
   const onDropOnPage = async (e, target) => {
     e.preventDefault()
     e.stopPropagation()
     const id = dragId.current
     dragId.current = null
+    const where = dropTarget?.where || 'inside'
+    setDropTarget(null)
     if (!id || id === target.id) return
     if (descendantIds(id, pages).has(target.id)) return
     const dragged = pages.find((p) => p.id === id)
-    if (dragged && (dragged.parent_id || null) !== target.id) {
-      await campaigns.updateWikiPage(campaign.id, id, { parent_id: target.id })
+    if (!dragged) return
+
+    if (where === 'inside') {
+      if ((dragged.parent_id || null) !== target.id) {
+        await campaigns.updateWikiPage(campaign.id, id, { parent_id: target.id })
+      }
+      loadList()
+      return
     }
+
+    // Sibling reorder: adopt the target's parent, then sit just before/after it.
+    const newParent = target.parent_id || null
+    if ((dragged.parent_id || null) !== newParent) {
+      await campaigns.updateWikiPage(campaign.id, id, { parent_id: newParent || '' })
+    }
+    const movedDragged = { ...dragged, parent_id: newParent }
+    const order = flattenOrder((pid) => {
+      const sibs = orderedSiblings(pid).filter((p) => p.id !== id)
+      if (pid !== newParent) return sibs
+      const idx = sibs.findIndex((p) => p.id === target.id)
+      const at = where === 'before' ? idx : idx + 1
+      return [...sibs.slice(0, at), movedDragged, ...sibs.slice(at)]
+    })
+    await campaigns.reorderWikiPages(campaign.id, order)
     loadList()
   }
 
@@ -777,13 +941,17 @@ export default function WikiView({ campaign, isOwner }) {
       setCreating(false)
       setSelectedId(p.id)
     }
+    // Reordering only applies in the nested tree, not the flattened search view.
+    const canDrag = isOwner && !flat
+    const indicator = dropTarget?.id === p.id ? dropTarget.where : null
     return (
       <div key={p.id}>
         <div
-          draggable={isOwner}
+          draggable={canDrag}
           onDragStart={(e) => onPageDragStart(e, p.id)}
-          onDragOver={isOwner ? (e) => e.preventDefault() : undefined}
-          onDrop={isOwner ? (e) => onDropOnPage(e, p) : undefined}
+          onDragOver={canDrag ? (e) => onPageDragOver(e, p) : undefined}
+          onDragLeave={canDrag ? () => setDropTarget(null) : undefined}
+          onDrop={canDrag ? (e) => onDropOnPage(e, p) : undefined}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -791,11 +959,25 @@ export default function WikiView({ campaign, isOwner }) {
             width: '100%',
             padding: '7px 10px',
             paddingLeft: 10 + depth * 14,
-            background: active ? 'var(--bg-card)' : 'transparent',
-            border: active ? '1px solid var(--border)' : '1px solid transparent',
+            background:
+              indicator === 'inside' ? 'var(--bg-card)' : active ? 'var(--bg-card)' : 'transparent',
+            borderLeft: active ? '1px solid var(--border)' : '1px solid transparent',
+            borderRight: active ? '1px solid var(--border)' : '1px solid transparent',
+            borderTop:
+              indicator === 'before'
+                ? '2px solid var(--gold)'
+                : active
+                  ? '1px solid var(--border)'
+                  : '1px solid transparent',
+            borderBottom:
+              indicator === 'after'
+                ? '2px solid var(--gold)'
+                : active
+                  ? '1px solid var(--border)'
+                  : '1px solid transparent',
             borderRadius: 8,
             color: active ? 'var(--text)' : 'var(--text-dim)',
-            cursor: isOwner ? 'grab' : 'pointer',
+            cursor: canDrag ? 'grab' : 'pointer',
             fontSize: 13,
             boxSizing: 'border-box',
           }}
@@ -1178,6 +1360,26 @@ const toolbarBtnActive = {
   background: 'var(--bg-card)',
   borderColor: 'var(--gold)',
   color: 'var(--gold)',
+}
+const toolbarGroup = {
+  display: 'inline-flex',
+  gap: 2,
+  padding: 2,
+  background: 'var(--bg-deep)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+}
+const iconBtn = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 28,
+  height: 26,
+  background: 'transparent',
+  border: 'none',
+  borderRadius: 6,
+  color: 'var(--text-dim)',
+  cursor: 'pointer',
 }
 const toolbarControl = {
   appearance: 'auto',

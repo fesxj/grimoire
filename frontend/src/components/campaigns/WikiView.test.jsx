@@ -1,13 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, createEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import WikiView from './WikiView'
+
+// jsdom's synthetic drag events drop clientY, so build the event explicitly and
+// pin clientY on it — that's what the row's drop-zone math reads.
+function fireDragAt(type, el, clientY) {
+  const ev = createEvent[type](el)
+  Object.defineProperty(ev, 'clientY', { value: clientY })
+  fireEvent(el, ev)
+}
 
 vi.mock('../../api', () => ({
   campaigns: {
     listWikiPages: vi.fn(),
     getWikiPage: vi.fn(),
     updateWikiPage: vi.fn(),
+    reorderWikiPages: vi.fn(),
   },
 }))
 
@@ -209,5 +218,89 @@ describe('WikiView nested tree', () => {
     // The editor's parent select defaults to the chosen parent.
     const select = await screen.findByLabelText('Parent page')
     expect(select.value).toBe('parent')
+  })
+
+  it('reorders siblings via drag-and-drop, persisting a new order', async () => {
+    const a = { ...page, id: 'a', title: 'Alpha', slug: 'alpha', sort_order: 0 }
+    const b = { ...page, id: 'b', title: 'Beta', slug: 'beta', sort_order: 1 }
+    campaigns.listWikiPages.mockResolvedValue([a, b])
+    campaigns.getWikiPage.mockResolvedValue(a)
+    renderView()
+    await screen.findByText('Alpha')
+
+    // Drag Beta and drop it above Alpha (top third → "before").
+    // "Alpha" also appears as the main-pane heading; the sidebar rows are the
+    // <button> elements inside a draggable wrapper.
+    const rowFor = (title) =>
+      screen
+        .getAllByText(title)
+        .map((el) => el.closest('div[draggable]'))
+        .find(Boolean)
+    const betaRow = rowFor('Beta')
+    const alphaRow = rowFor('Alpha')
+    fireEvent.dragStart(betaRow)
+    alphaRow.getBoundingClientRect = () => ({ top: 0, height: 30 })
+    fireDragAt('dragOver', alphaRow, 2)
+    fireDragAt('drop', alphaRow, 2)
+
+    await waitFor(() => expect(campaigns.reorderWikiPages).toHaveBeenCalledWith('c1', ['b', 'a']))
+  })
+
+  it('nests a page when dropped on the middle of another row', async () => {
+    const a = { ...page, id: 'a', title: 'Alpha', slug: 'alpha', sort_order: 0 }
+    const b = { ...page, id: 'b', title: 'Beta', slug: 'beta', sort_order: 1 }
+    campaigns.listWikiPages.mockResolvedValue([a, b])
+    campaigns.getWikiPage.mockResolvedValue(a)
+    renderView()
+    await screen.findByText('Alpha')
+
+    // "Alpha" also appears as the main-pane heading; the sidebar rows are the
+    // <button> elements inside a draggable wrapper.
+    const rowFor = (title) =>
+      screen
+        .getAllByText(title)
+        .map((el) => el.closest('div[draggable]'))
+        .find(Boolean)
+    const betaRow = rowFor('Beta')
+    const alphaRow = rowFor('Alpha')
+    fireEvent.dragStart(betaRow)
+    alphaRow.getBoundingClientRect = () => ({ top: 0, height: 30 })
+    fireDragAt('dragOver', alphaRow, 15)
+    fireDragAt('drop', alphaRow, 15)
+
+    await waitFor(() =>
+      expect(campaigns.updateWikiPage).toHaveBeenCalledWith('c1', 'b', { parent_id: 'a' })
+    )
+  })
+})
+
+describe('WikiView markdown formatting toolbar', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    campaigns.listWikiPages.mockResolvedValue([page])
+    campaigns.getWikiPage.mockResolvedValue(page)
+    campaigns.updateWikiPage.mockResolvedValue(page)
+  })
+
+  it('wraps the selection in bold markers when the Bold button is clicked', async () => {
+    renderView()
+    await screen.findByText('Here be dragons')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+
+    const textarea = await screen.findByLabelText('Markdown')
+    textarea.setSelectionRange(8, 15) // "dragons"
+    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    expect(textarea.value).toBe('Here be **dragons**')
+  })
+
+  it('prefixes the current line for the Bullet list button', async () => {
+    renderView()
+    await screen.findByText('Here be dragons')
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+
+    const textarea = await screen.findByLabelText('Markdown')
+    textarea.setSelectionRange(0, 0)
+    fireEvent.click(screen.getByRole('button', { name: 'Bullet list' }))
+    expect(textarea.value).toBe('- Here be dragons')
   })
 })

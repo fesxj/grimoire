@@ -68,6 +68,27 @@ describe('WikiMarkdown', () => {
     expect(screen.queryByText(/\|\|/)).toBeNull()
   })
 
+  it('keeps an inline ||secret|| within its surrounding paragraph', () => {
+    const { container } = renderMd({ body: 'The duke is ||a doppelganger|| in disguise.' })
+    // The secret must not break the sentence into separate paragraphs.
+    expect(container.querySelectorAll('p').length).toBe(1)
+    expect(container.textContent).toContain('The duke is a doppelganger in disguise.')
+  })
+
+  it('renders a multiline ||GM secret|| as a tinted block keeping all its text', () => {
+    const { container } = renderMd({ body: '||\nsecret text\nmore secret text\n||' })
+    expect(container.textContent).toContain('secret text')
+    expect(container.textContent).toContain('more secret text')
+    // The pipe markers themselves are not rendered.
+    expect(screen.queryByText(/\|\|/)).toBeNull()
+  })
+
+  it('renders markdown inside a multiline secret block', () => {
+    const { container } = renderMd({ body: '||\n- one\n- two\n||' })
+    const items = container.querySelectorAll('li')
+    expect(items.length).toBe(2)
+  })
+
   it('keeps a [[wiki link]] working when it sits next to a secret', () => {
     const onOpenSlug = vi.fn()
     renderMd({

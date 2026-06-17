@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { Fragment, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
@@ -17,7 +17,8 @@ const EMBED_PREFIXES = ['book:', 'map:', 'token:']
 
 // ||GM-only text||. Only the owner ever receives a body still containing these
 // (the backend strips them for everyone else), so rendering them as a tinted
-// "GM only" span just helps the owner see what players won't.
+// "GM only" span just helps the owner see what players won't. The match spans
+// newlines so a secret can wrap several lines/paragraphs.
 const SECRET_RE = /\|\|([\s\S]*?)\|\|/g
 
 function slugify(title) {
@@ -37,22 +38,56 @@ function escapeLinkText(text) {
   return text.replace(/\\/g, '\\\\').replace(/\]/g, '\\]')
 }
 
-function preprocess(body) {
-  // Wrap GM-only ||secrets|| first so their pipes aren't mistaken for the
-  // [[Title|label]] separator below. The inner text becomes the link text of a
-  // private grimoire-secret: scheme, rendered as a tinted span in the `a` handler.
-  const withSecrets = (body || '').replace(SECRET_RE, (_match, inner) => {
-    return `[${escapeLinkText(inner)}](grimoire-secret:)`
-  })
-  return withSecrets.replace(LINK_RE, (_match, target, label) => {
+// Rewrite [[...]] page links and Grimoire embeds into our private link schemes.
+function rewriteLinks(text) {
+  return text.replace(LINK_RE, (_match, target, label) => {
     const t = target.trim()
     const lower = t.toLowerCase()
     if (EMBED_PREFIXES.some((p) => lower.startsWith(p))) {
       return `[embed](grimoire-embed:${t})`
     }
-    const text = escapeLinkText((label || t).trim())
-    return `[${text}](grimoire-wiki:${slugify(t)})`
+    const linkText = escapeLinkText((label || t).trim())
+    return `[${linkText}](grimoire-wiki:${slugify(t)})`
   })
+}
+
+// Split a body into ordered segments, isolating multiline ||GM secrets|| so they
+// can be wrapped in a tinted block. A single-line secret can't be split out —
+// doing so would break its paragraph in two — so it's left in the surrounding
+// text segment as a private grimoire-secret: link (rendered as an inline tinted
+// span). Only a secret that spans newlines (which has no inline markdown form)
+// becomes its own block segment. Each segment's markdown is otherwise unchanged.
+function splitSecrets(body) {
+  const src = body || ''
+  const segments = []
+  let buf = '' // accumulates ordinary text + inline secrets up to the next block
+  const flush = () => {
+    if (buf) {
+      segments.push({ block: false, text: rewriteLinks(buf) })
+      buf = ''
+    }
+  }
+  let last = 0
+  SECRET_RE.lastIndex = 0
+  let m
+  while ((m = SECRET_RE.exec(src)) !== null) {
+    buf += src.slice(last, m.index)
+    const inner = m[1]
+    if (/[\r\n]/.test(inner)) {
+      // Block secret: flush the inline run, then emit the secret on its own with
+      // its inner markdown intact for a separate render pass.
+      flush()
+      segments.push({ block: true, text: rewriteLinks(inner) })
+    } else {
+      // Inline secret: fold into the running text as a tinted link so it stays in
+      // the flow of the paragraph it lives in.
+      buf += `[${escapeLinkText(inner)}](grimoire-secret:)`
+    }
+    last = m.index + m[0].length
+  }
+  buf += src.slice(last)
+  flush()
+  return segments
 }
 
 function EmbedCard({ spec, onNavigate }) {
@@ -96,7 +131,7 @@ export default function WikiMarkdown({ body, pageSlugs = [], onOpenSlug }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const slugSet = useMemo(() => new Set(pageSlugs), [pageSlugs])
-  const processed = useMemo(() => preprocess(body), [body])
+  const segments = useMemo(() => splitSecrets(body), [body])
 
   const components = useMemo(
     () => ({
@@ -241,19 +276,39 @@ export default function WikiMarkdown({ body, pageSlugs = [], onOpenSlug }) {
     )
   }
 
+  const renderMarkdown = (text) => (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={components}
+      // Preserve our private grimoire-wiki:/grimoire-embed: schemes, which
+      // react-markdown's default urlTransform would otherwise strip.
+      urlTransform={(url) => url}
+    >
+      {text}
+    </ReactMarkdown>
+  )
+
   return (
     <div className="wiki-markdown" style={{ fontSize: 15, lineHeight: 1.7 }}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={components}
-        // Preserve our private grimoire-wiki:/grimoire-embed: schemes, which
-        // react-markdown's default urlTransform would otherwise strip.
-        urlTransform={(url) => url}
-      >
-        {processed}
-      </ReactMarkdown>
+      {segments.map((seg, i) =>
+        seg.block ? (
+          <div key={i} title={t('wiki.secretHint')} style={secretBlockStyle}>
+            {renderMarkdown(seg.text)}
+          </div>
+        ) : (
+          <Fragment key={i}>{renderMarkdown(seg.text)}</Fragment>
+        )
+      )}
     </div>
   )
+}
+
+const secretBlockStyle = {
+  background: 'var(--gold-dim, rgba(212, 175, 55, 0.15))',
+  borderLeft: '3px solid var(--gold)',
+  borderRadius: 4,
+  padding: '4px 12px',
+  margin: '8px 0',
 }
 
 function cellStyle(header) {

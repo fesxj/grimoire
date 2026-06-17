@@ -141,8 +141,12 @@ export default function WikiMarkdown({ body, pageSlugs = [], onOpenSlug }) {
             <span
               title={t('wiki.secretHint')}
               style={{
-                background: 'var(--gold-dim, rgba(212, 175, 55, 0.15))',
-                borderRadius: 4,
+                // A low-alpha gold tint (not the solid --gold-dim) so it reads as
+                // a highlight without washing out gold headings or white body text.
+                background: 'rgba(201, 168, 76, 0.16)',
+                boxShadow: 'inset 2px 0 0 var(--gold)',
+                color: 'inherit',
+                borderRadius: 3,
                 padding: '0 4px',
                 boxDecorationBreak: 'clone',
                 WebkitBoxDecorationBreak: 'clone',
@@ -304,7 +308,8 @@ export default function WikiMarkdown({ body, pageSlugs = [], onOpenSlug }) {
 }
 
 const secretBlockStyle = {
-  background: 'var(--gold-dim, rgba(212, 175, 55, 0.15))',
+  // Low-alpha gold tint + gold rule, so headings and body text inside stay legible.
+  background: 'rgba(201, 168, 76, 0.1)',
   borderLeft: '3px solid var(--gold)',
   borderRadius: 4,
   padding: '4px 12px',

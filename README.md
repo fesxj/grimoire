@@ -33,28 +33,6 @@ A Docker-based web application for managing your tabletop RPG PDF collection. Br
 - **Docker Ready** — One command to run, mount your library directory, done
 - **Responsive** — Works on desktop, tablet, and phone with mobile navigation
 
----
-
-## Screenshots
-
-| Library | Reader |
-|---------|--------|
-| ![Library](docs/images/library.png) | ![Reader](docs/images/reader.png) |
-
-| Search | Favorites |
-|--------|-----------|
-| ![Search](docs/images/search.png) | ![Favorites](docs/images/favorites.png) |
-
-| Maps | Tokens |
-|------|--------|
-| ![Maps](docs/images/maps.png) | ![Tokens](docs/images/tokens.png) |
-
-| Campaigns | Scheduling |
-|-----------|------------|
-| ![Campaigns](docs/images/campaigns.png) | ![Scheduling](docs/images/scheduling.png) |
-
----
-
 ## Quick Start
 
 > New to Docker? See the [Docker Installation Guide](docs/docker-install.md) for a step-by-step walkthrough for Windows, macOS, and Linux.

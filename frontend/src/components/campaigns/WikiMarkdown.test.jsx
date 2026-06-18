@@ -106,4 +106,18 @@ describe('WikiMarkdown', () => {
     // Embed renders a labeled button; no stub wiki link created.
     expect(screen.getByRole('button')).toBeTruthy()
   })
+
+  it('renders an [[image:ID]] embed as an inline image when given a campaign id', () => {
+    const { container } = renderMd({ body: '[[image:img789]]', campaignId: 'camp1' })
+    const img = container.querySelector('img')
+    expect(img).toBeTruthy()
+    // The src points at the campaign file endpoint for that image.
+    expect(img.getAttribute('src')).toContain('/campaigns/camp1/files/img789')
+  })
+
+  it('renders a [[file:ID]] embed as a clickable download card', () => {
+    renderMd({ body: '[[file:doc555]]', campaignId: 'camp1' })
+    // A file embed is a button (opens the file), not an inline image.
+    expect(screen.getByRole('button')).toBeTruthy()
+  })
 })

@@ -190,6 +190,7 @@ describe('WikiView nested tree', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     campaigns.listWikiPages.mockResolvedValue([parent, child])
     campaigns.getWikiPage.mockResolvedValue(parent)
     campaigns.updateWikiPage.mockResolvedValue(parent)
@@ -208,6 +209,22 @@ describe('WikiView nested tree', () => {
     // Expanding brings it back.
     fireEvent.click(screen.getByRole('button', { name: 'Expand' }))
     expect(screen.getByText('Goblins')).toBeTruthy()
+  })
+
+  it('remembers collapse state per browser across remounts', async () => {
+    const { unmount } = renderView()
+    await screen.findByText('Bestiary')
+
+    // Collapse the parent, which persists to localStorage.
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
+    expect(screen.queryByText('Goblins')).toBeNull()
+    expect(JSON.parse(localStorage.getItem('grimoire_wiki_collapsed_c1'))).toContain('parent')
+
+    // Remounting (e.g. navigating back) restores the collapsed state.
+    unmount()
+    renderView()
+    await screen.findByText('Bestiary')
+    expect(screen.queryByText('Goblins')).toBeNull()
   })
 
   it('creates a subpage under a parent via the row + button', async () => {

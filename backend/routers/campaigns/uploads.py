@@ -7,8 +7,9 @@ player who belongs to several campaigns gets a distinct file per membership.
 
 import io
 import os
+import uuid
 
-from fastapi import Depends, File, HTTPException, UploadFile
+from fastapi import Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from ...auth import CurrentUser, get_current_user
@@ -299,8 +300,6 @@ def upload_campaign_file(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """GM uploads a file that becomes a linked 'file' resource. Admins bypass limits."""
-    import uuid
-
     from ...models import CampaignFile, CampaignResource
 
     db = SessionLocal()
@@ -340,6 +339,7 @@ def upload_campaign_file(
             filename=os.path.basename(file.filename or stored),
             mime_type=file.content_type or "application/octet-stream",
             size_bytes=len(data),
+            is_image=(file.content_type in _IMAGE_TYPES),
             uploaded_by_id=current_user.id,
         )
         db.add(cf)
@@ -362,6 +362,108 @@ def upload_campaign_file(
             "resource_type": "file",
             "resource_id": cf.id,
             "name": cf.filename,
+            "is_image": cf.is_image,
+            "visibility": res.visibility,
+            "category_id": res.category_id,
+            "sort_order": res.sort_order,
+        }
+    finally:
+        db.close()
+
+
+def upload_campaign_image(
+    campaign_id: str,
+    file: UploadFile = File(...),
+    category_id: str = Form(""),
+    new_category_name: str = Form(""),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Upload an image to embed in a wiki note.
+
+    The image becomes a campaign file resource (resource_type='file', is_image=True)
+    so it also appears under linked resources. The GM may file it under an existing
+    resource category (`category_id`) or create a new one (`new_category_name`).
+    """
+    from ...models import CampaignCategory, CampaignFile, CampaignResource
+
+    db = SessionLocal()
+    try:
+        c = get_campaign_or_404(db, campaign_id)
+        assert_can_manage(c, current_user, db)
+
+        is_admin = current_user.role == "admin"
+        disabled, max_file, _max_total = _upload_limits(db)
+        if disabled and not is_admin:
+            raise HTTPException(403, "Campaign file uploads are disabled by the administrator")
+
+        data = _read_upload(file, _IMAGE_TYPES, _MAX_IMAGE_BYTES)
+        _validate_image(data)
+        if not is_admin and max_file and len(data) > max_file:
+            raise HTTPException(413, "File exceeds the per-file size limit")
+
+        # Resolve the category: an existing resource category, or create a new one.
+        resolved_category_id = None
+        new_name = (new_category_name or "").strip()
+        if new_name:
+            max_order = (
+                db.query(CampaignCategory)
+                .filter_by(campaign_id=campaign_id, kind="resource")
+                .count()
+            )
+            cat = CampaignCategory(
+                campaign_id=campaign_id,
+                kind="resource",
+                name=new_name,
+                sort_order=max_order,
+            )
+            db.add(cat)
+            db.flush()
+            resolved_category_id = cat.id
+        elif category_id:
+            cat = (
+                db.query(CampaignCategory)
+                .filter_by(id=category_id, campaign_id=campaign_id, kind="resource")
+                .first()
+            )
+            if not cat:
+                raise HTTPException(400, "Invalid category")
+            resolved_category_id = cat.id
+
+        ext = _IMAGE_TYPES[file.content_type]
+        stored = f"{uuid.uuid4().hex}{ext}"
+        with open(os.path.join(_FILES_DIR, stored), "wb") as f:
+            f.write(data)
+
+        cf = CampaignFile(
+            campaign_id=campaign_id,
+            stored_path=stored,
+            filename=os.path.basename(file.filename or stored),
+            mime_type=file.content_type,
+            size_bytes=len(data),
+            is_image=True,
+            uploaded_by_id=current_user.id,
+        )
+        db.add(cf)
+        db.flush()
+
+        max_order = db.query(CampaignResource).filter_by(campaign_id=campaign_id).count()
+        res = CampaignResource(
+            campaign_id=campaign_id,
+            resource_type="file",
+            resource_id=cf.id,
+            visibility="gm",
+            category_id=resolved_category_id,
+            sort_order=max_order,
+        )
+        db.add(res)
+        db.commit()
+        db.refresh(res)
+        return {
+            "id": res.id,
+            "resource_type": "file",
+            "resource_id": cf.id,
+            "name": cf.filename,
+            "is_image": True,
             "visibility": res.visibility,
             "category_id": res.category_id,
             "sort_order": res.sort_order,

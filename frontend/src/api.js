@@ -80,6 +80,13 @@ export const campaigns = {
   // GM-uploaded campaign files (linked as resource_type='file')
   uploadFile: (id, file) => api.upload(`/campaigns/${id}/files`, file),
   fileUrl: (id, fileId) => mediaUrl(`/campaigns/${id}/files/${fileId}`),
+  // Image upload for note embedding. opts: { categoryId, newCategoryName }.
+  uploadImage: (id, file, opts = {}) => {
+    const fields = {}
+    if (opts.categoryId) fields.category_id = opts.categoryId
+    if (opts.newCategoryName) fields.new_category_name = opts.newCategoryName
+    return api.upload(`/campaigns/${id}/images`, file, fields)
+  },
   searchResources: (q = '', resourceType = '', systemId = '', limit = 40) => {
     const params = new URLSearchParams()
     if (q) params.set('q', q)
@@ -126,6 +133,9 @@ export const campaigns = {
     api.patch(`/campaigns/${id}/categories/${categoryId}`, { name }),
   reorderCategories: (id, orderedIds) =>
     api.put(`/campaigns/${id}/categories/reorder`, { ordered_ids: orderedIds }),
+  // Persist the resource panel's group display order (category + type-group keys).
+  setResourceGroupOrder: (id, orderedKeys) =>
+    api.put(`/campaigns/${id}/resource-group-order`, { ordered_keys: orderedKeys }),
   // mode: 'uncategorize' | 'delete_items'
   deleteCategory: (id, categoryId, mode) =>
     api.delete(`/campaigns/${id}/categories/${categoryId}?mode=${mode}`),
@@ -217,9 +227,11 @@ const api = {
   },
 
   // Multipart upload — do NOT set Content-Type so the browser adds the boundary.
-  upload: (url, file) => {
+  // `fields` appends extra form values alongside the file.
+  upload: (url, file, fields = {}) => {
     const form = new FormData()
     form.append('file', file)
+    for (const [k, v] of Object.entries(fields)) form.append(k, v)
     return fetch(`/api${url}`, {
       method: 'POST',
       headers: authHeaders(),

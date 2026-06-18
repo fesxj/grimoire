@@ -1104,7 +1104,14 @@
     "chooseFile": "Choose file",
     "importing": "Importing…",
     "imported": "Imported {{count}} page",
-    "imported_other": "Imported {{count}} pages"
+    "imported_other": "Imported {{count}} pages",
+    "embed_file": "File",
+    "uploadImage": "Upload image",
+    "uploadAndEmbed": "Upload & embed",
+    "noLinkedResources": "No linked resources yet. Link books, maps, or tokens in the Resources panel first.",
+    "imageCategory": "File the image under a category",
+    "newCategoryPlaceholder": "New category name",
+    "chooseImage": "Choose an image"
   },
   "campaignNotes": {
     "backToOverview": "Back to overview"
@@ -1121,7 +1128,8 @@
     "leaveUncategorized": "Leave items uncategorized",
     "deletePages": "Delete pages in it",
     "unlinkResources": "Unlink resources in it",
-    "iconLabel": "Icon"
+    "iconLabel": "Icon",
+    "builtIn": "Built-in"
   },
   "iconPicker": {
     "label": "Choose an icon",

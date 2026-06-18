@@ -9,14 +9,26 @@ import {
   LuChevronDown,
   LuCheck,
   LuFolder,
+  LuLayers,
 } from 'react-icons/lu'
 import { campaigns } from '../../api'
 import Spinner from '../Spinner'
 import IconPicker from './IconPicker'
 
 // Modal for managing a campaign's categories of a given kind ('note' | 'resource').
-// Supports create, rename, reorder, and delete with two modes.
-export default function CategoryManager({ campaignId, kind, onClose, onChanged }) {
+// Supports create, rename, reorder, and delete with two modes. When `typeGroups`
+// is supplied (resource kind), the built-in type groups (Books/Maps/Tokens/Files)
+// appear in the same orderable list so the whole panel order is GM-controlled;
+// type groups can be moved but not renamed or deleted.
+export default function CategoryManager({
+  campaignId,
+  kind,
+  typeGroups = [],
+  groupOrder = [],
+  onGroupOrderChange,
+  onClose,
+  onChanged,
+}) {
   const { t } = useTranslation()
   const [cats, setCats] = useState(null)
   const [newName, setNewName] = useState('')
@@ -24,13 +36,50 @@ export default function CategoryManager({ campaignId, kind, onClose, onChanged }
   const [editName, setEditName] = useState('')
   const [deleting, setDeleting] = useState(null) // the category pending delete-mode choice
   const [busy, setBusy] = useState(false)
+  // The unified, ordered list of rows shown when type groups are included.
+  const [rows, setRows] = useState(null)
+
+  const hasTypeGroups = typeGroups.length > 0
+
+  // Merge categories + type groups into one ordered list using the saved group
+  // order; unlisted groups fall to the end (categories before type groups).
+  const buildRows = useCallback(
+    (list) => {
+      const catRows = list.map((c) => ({
+        key: `cat:${c.id}`,
+        kind: 'cat',
+        id: c.id,
+        name: c.name,
+        icon: c.icon,
+        sort_order: c.sort_order,
+      }))
+      const typeRows = typeGroups.map((g) => ({ key: g.key, kind: 'type', name: g.label }))
+      const all = [...catRows, ...typeRows]
+      const orderIndex = (key) => {
+        const i = groupOrder.indexOf(key)
+        return i === -1 ? groupOrder.length + all.findIndex((r) => r.key === key) : i
+      }
+      return [...all].sort((a, b) => orderIndex(a.key) - orderIndex(b.key))
+    },
+    [typeGroups, groupOrder]
+  )
 
   const load = useCallback(() => {
     campaigns
       .listCategories(campaignId, kind)
-      .then((list) => setCats([...list].sort((a, b) => a.sort_order - b.sort_order)))
-      .catch(() => setCats([]))
-  }, [campaignId, kind])
+      .then((list) => {
+        const sorted = [...list].sort((a, b) => a.sort_order - b.sort_order)
+        setCats(sorted)
+        if (hasTypeGroups) setRows(buildRows(sorted))
+      })
+      .catch(() => {
+        setCats([])
+        if (hasTypeGroups) setRows(buildRows([]))
+      })
+    // buildRows is intentionally omitted: it changes with groupOrder on every
+    // reorder, but load should only re-run when the campaign/kind changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaignId, kind, hasTypeGroups])
 
   useEffect(() => {
     load()
@@ -66,10 +115,29 @@ export default function CategoryManager({ campaignId, kind, onClose, onChanged }
 
   const setIcon = async (id, icon) => {
     setCats((prev) => prev.map((c) => (c.id === id ? { ...c, icon } : c)))
+    if (hasTypeGroups) setRows((prev) => prev.map((r) => (r.id === id ? { ...r, icon } : r)))
     await campaigns.updateCategory(campaignId, id, { icon: icon || '' })
     onChanged?.()
   }
 
+  // Reorder in the unified (categories + type groups) list: persist the whole
+  // group order, and also push category sort_order so the order is stable even
+  // without a saved group order.
+  const moveRow = async (index, dir) => {
+    const next = [...rows]
+    const target = index + dir
+    if (target < 0 || target >= next.length) return
+    ;[next[index], next[target]] = [next[target], next[index]]
+    setRows(next)
+    const orderedKeys = next.map((r) => r.key)
+    onGroupOrderChange?.(orderedKeys)
+    await campaigns.setResourceGroupOrder(campaignId, orderedKeys)
+    const catIds = next.filter((r) => r.kind === 'cat').map((r) => r.id)
+    if (catIds.length) await campaigns.reorderCategories(campaignId, catIds)
+    onChanged?.()
+  }
+
+  // Reorder categories only (notes kind, or any kind without type groups).
   const move = async (index, dir) => {
     const next = [...cats]
     const target = index + dir
@@ -93,6 +161,131 @@ export default function CategoryManager({ campaignId, kind, onClose, onChanged }
     } finally {
       setBusy(false)
     }
+  }
+
+  // Up/down arrows for a row at `index` in a list of length `count`.
+  const moveArrows = (index, count, onMove) => (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <button
+        onClick={() => onMove(index, -1)}
+        disabled={index === 0}
+        aria-label={t('campaignCategories.moveUp')}
+        style={arrowBtn(index === 0)}
+      >
+        <LuChevronUp size={13} />
+      </button>
+      <button
+        onClick={() => onMove(index, 1)}
+        disabled={index === count - 1}
+        aria-label={t('campaignCategories.moveDown')}
+        style={arrowBtn(index === count - 1)}
+      >
+        <LuChevronDown size={13} />
+      </button>
+    </div>
+  )
+
+  // The editable name + edit/delete controls for a category row.
+  const catControls = (c) => (
+    <>
+      <IconPicker
+        value={c.icon}
+        onChange={(icon) => setIcon(c.id, icon)}
+        fallback={<LuFolder size={15} aria-hidden="true" />}
+        ariaLabel={t('campaignCategories.iconLabel')}
+      />
+      {editingId === c.id ? (
+        <input
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') rename(c.id)
+            if (e.key === 'Escape') setEditingId(null)
+          }}
+          autoFocus
+          style={{
+            flex: 1,
+            padding: '5px 8px',
+            background: 'var(--bg-deep)',
+            border: '1px solid var(--border)',
+            borderRadius: 6,
+            color: 'var(--text)',
+            fontSize: 13,
+          }}
+        />
+      ) : (
+        <span style={{ flex: 1, fontSize: 14 }}>{c.name}</span>
+      )}
+      {editingId === c.id ? (
+        <button onClick={() => rename(c.id)} aria-label={t('common.save')} style={iconBtn}>
+          <LuCheck size={14} color="var(--gold)" />
+        </button>
+      ) : (
+        <button
+          onClick={() => {
+            setEditingId(c.id)
+            setEditName(c.name)
+          }}
+          aria-label={t('common.edit')}
+          style={iconBtn}
+        >
+          <LuPencil size={13} />
+        </button>
+      )}
+      <button
+        onClick={() => setDeleting(c)}
+        aria-label={t('common.delete')}
+        style={{ ...iconBtn, color: 'var(--danger)' }}
+      >
+        <LuTrash2 size={13} />
+      </button>
+    </>
+  )
+
+  const renderList = () => {
+    const loading = cats === null || (hasTypeGroups && rows === null)
+    if (loading) {
+      return (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
+          <Spinner size={18} />
+        </div>
+      )
+    }
+
+    // Unified list: categories interleaved with built-in type groups.
+    if (hasTypeGroups) {
+      return rows.map((r, i) => (
+        <div key={r.key} style={rowStyle}>
+          {moveArrows(i, rows.length, moveRow)}
+          {r.kind === 'type' ? (
+            <>
+              <LuLayers size={15} aria-hidden="true" style={{ color: 'var(--text-muted)' }} />
+              <span style={{ flex: 1, fontSize: 14 }}>{r.name}</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {t('campaignCategories.builtIn')}
+              </span>
+            </>
+          ) : (
+            catControls(r)
+          )}
+        </div>
+      ))
+    }
+
+    // Category-only list (notes, or resources without type groups).
+    if (cats.length === 0) {
+      return (
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 2px' }}>
+          {t('campaignCategories.none')}
+        </div>
+      )
+    }
+    return cats.map((c, i) => (
+      <div key={c.id} style={rowStyle}>
+        {moveArrows(i, cats.length, move)}
+        {catControls(c)}
+      </div>
+    ))
   }
 
   return (
@@ -167,107 +360,7 @@ export default function CategoryManager({ campaignId, kind, onClose, onChanged }
           </button>
         </div>
 
-        <div style={{ overflowY: 'auto', flex: 1 }}>
-          {cats === null ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
-              <Spinner size={18} />
-            </div>
-          ) : cats.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '8px 2px' }}>
-              {t('campaignCategories.none')}
-            </div>
-          ) : (
-            cats.map((c, i) => (
-              <div
-                key={c.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 4px',
-                  borderBottom: '1px solid var(--border)',
-                }}
-              >
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <button
-                    onClick={() => move(i, -1)}
-                    disabled={i === 0}
-                    aria-label={t('campaignCategories.moveUp')}
-                    style={arrowBtn(i === 0)}
-                  >
-                    <LuChevronUp size={13} />
-                  </button>
-                  <button
-                    onClick={() => move(i, 1)}
-                    disabled={i === cats.length - 1}
-                    aria-label={t('campaignCategories.moveDown')}
-                    style={arrowBtn(i === cats.length - 1)}
-                  >
-                    <LuChevronDown size={13} />
-                  </button>
-                </div>
-
-                <IconPicker
-                  value={c.icon}
-                  onChange={(icon) => setIcon(c.id, icon)}
-                  fallback={<LuFolder size={15} aria-hidden="true" />}
-                  ariaLabel={t('campaignCategories.iconLabel')}
-                />
-
-                {editingId === c.id ? (
-                  <input
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') rename(c.id)
-                      if (e.key === 'Escape') setEditingId(null)
-                    }}
-                    autoFocus
-                    style={{
-                      flex: 1,
-                      padding: '5px 8px',
-                      background: 'var(--bg-deep)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 6,
-                      color: 'var(--text)',
-                      fontSize: 13,
-                    }}
-                  />
-                ) : (
-                  <span style={{ flex: 1, fontSize: 14 }}>{c.name}</span>
-                )}
-
-                {editingId === c.id ? (
-                  <button
-                    onClick={() => rename(c.id)}
-                    aria-label={t('common.save')}
-                    style={iconBtn}
-                  >
-                    <LuCheck size={14} color="var(--gold)" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setEditingId(c.id)
-                      setEditName(c.name)
-                    }}
-                    aria-label={t('common.edit')}
-                    style={iconBtn}
-                  >
-                    <LuPencil size={13} />
-                  </button>
-                )}
-                <button
-                  onClick={() => setDeleting(c)}
-                  aria-label={t('common.delete')}
-                  style={{ ...iconBtn, color: 'var(--danger)' }}
-                >
-                  <LuTrash2 size={13} />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
+        <div style={{ overflowY: 'auto', flex: 1 }}>{renderList()}</div>
 
         {/* Delete-mode choice */}
         {deleting && (
@@ -307,6 +400,13 @@ export default function CategoryManager({ campaignId, kind, onClose, onChanged }
   )
 }
 
+const rowStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '7px 4px',
+  borderBottom: '1px solid var(--border)',
+}
 const goldBtn = {
   display: 'inline-flex',
   alignItems: 'center',

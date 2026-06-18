@@ -3,17 +3,18 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { LuBookOpen, LuMap, LuUser, LuFileQuestion } from 'react-icons/lu'
+import { campaigns } from '../../api'
+import { LuBookOpen, LuMap, LuUser, LuFile, LuFileQuestion } from 'react-icons/lu'
 
 // We avoid a custom remark tokenizer by rewriting [[...]] tokens into ordinary
 // markdown links with a private href scheme, then interpreting that scheme in a
 // custom `a` renderer below.
 //   [[Page Title]]            -> [Page Title](grimoire-wiki:slug-of-title)
 //   [[Page Title|label]]      -> [label](grimoire-wiki:slug-of-title)
-//   [[book:ID]] / [[book:ID:PAGE]] / [[map:ID]] / [[token:ID]]
+//   [[book:ID]] / [[book:ID:PAGE]] / [[map:ID]] / [[token:ID]] / [[file:ID]] / [[image:ID]]
 //                             -> [embed](grimoire-embed:book:ID:PAGE)
 const LINK_RE = /\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]/g
-const EMBED_PREFIXES = ['book:', 'map:', 'token:']
+const EMBED_PREFIXES = ['book:', 'map:', 'token:', 'file:', 'image:']
 
 // ||GM-only text||. Only the owner ever receives a body still containing these
 // (the backend strips them for everyone else), so rendering them as a tinted
@@ -90,9 +91,38 @@ function splitSecrets(body) {
   return segments
 }
 
-function EmbedCard({ spec, onNavigate }) {
+function EmbedCard({ spec, campaignId, onNavigate }) {
   const { t } = useTranslation()
   const [type, id, page] = spec.split(':')
+
+  // An embedded image renders inline. It's served from the campaign file endpoint
+  // (token-authenticated), so we need the campaign id to build the URL.
+  if (type === 'image') {
+    if (!campaignId) return null
+    return (
+      <img
+        src={campaigns.fileUrl(campaignId, id)}
+        alt=""
+        style={{ maxWidth: '100%', borderRadius: 8, display: 'block', margin: '8px 0' }}
+      />
+    )
+  }
+
+  // A non-image campaign file embeds as a download card opening the file.
+  if (type === 'file') {
+    if (!campaignId) return null
+    return (
+      <button
+        type="button"
+        onClick={() => window.open(campaigns.fileUrl(campaignId, id), '_blank')}
+        style={embedCardStyle}
+      >
+        <LuFile size={15} color="#e0b341" />
+        {t('wiki.embed_file')}
+      </button>
+    )
+  }
+
   const meta = {
     book: { Icon: LuBookOpen, color: '#a78bfa', to: `/library/book/${id}` },
     map: { Icon: LuMap, color: '#60a5fa', to: `/maps/${id}` },
@@ -104,30 +134,28 @@ function EmbedCard({ spec, onNavigate }) {
   const label =
     type === 'book' && page ? t('wiki.embedBookPage', { page }) : t(`wiki.embed_${type}`)
   return (
-    <button
-      type="button"
-      onClick={() => onNavigate(to)}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '6px 12px',
-        margin: '2px 0',
-        background: 'var(--bg-deep)',
-        border: '1px solid var(--border)',
-        borderRadius: 8,
-        color: 'var(--text)',
-        cursor: 'pointer',
-        fontSize: 14,
-      }}
-    >
+    <button type="button" onClick={() => onNavigate(to)} style={embedCardStyle}>
       <Icon size={15} color={color} />
       {label}
     </button>
   )
 }
 
-export default function WikiMarkdown({ body, pageSlugs = [], onOpenSlug }) {
+const embedCardStyle = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '6px 12px',
+  margin: '2px 0',
+  background: 'var(--bg-deep)',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  color: 'var(--text)',
+  cursor: 'pointer',
+  fontSize: 14,
+}
+
+export default function WikiMarkdown({ body, campaignId, pageSlugs = [], onOpenSlug }) {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const slugSet = useMemo(() => new Set(pageSlugs), [pageSlugs])
@@ -181,7 +209,13 @@ export default function WikiMarkdown({ body, pageSlugs = [], onOpenSlug }) {
           )
         }
         if (href?.startsWith('grimoire-embed:')) {
-          return <EmbedCard spec={href.slice('grimoire-embed:'.length)} onNavigate={navigate} />
+          return (
+            <EmbedCard
+              spec={href.slice('grimoire-embed:'.length)}
+              campaignId={campaignId}
+              onNavigate={navigate}
+            />
+          )
         }
         // Ordinary external/internal links.
         const external = href && /^https?:\/\//.test(href)
@@ -264,7 +298,7 @@ export default function WikiMarkdown({ body, pageSlugs = [], onOpenSlug }) {
         )
       },
     }),
-    [slugSet, onOpenSlug, navigate, t]
+    [slugSet, onOpenSlug, navigate, t, campaignId]
   )
 
   if (!body?.trim()) {

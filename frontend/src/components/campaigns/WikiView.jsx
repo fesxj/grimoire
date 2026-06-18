@@ -647,7 +647,11 @@ function PageEditor({ campaign, isOwner, page, allPages, defaultParentId, onSave
                 minHeight: 200,
               }}
             >
-              <WikiMarkdown body={body} pageSlugs={allPages.map((p) => p.slug)} />
+              <WikiMarkdown
+                body={body}
+                campaignId={campaign.id}
+                pageSlugs={allPages.map((p) => p.slug)}
+              />
             </div>
           </div>
         )}
@@ -666,6 +670,7 @@ function PageEditor({ campaign, isOwner, page, allPages, defaultParentId, onSave
 
       {showEmbedPicker && (
         <GrimoireEmbedPicker
+          campaignId={campaign.id}
           onInsert={(token) => {
             insertAtCursor(token)
             setShowEmbedPicker(false)
@@ -687,8 +692,16 @@ export default function WikiView({ campaign, isOwner }) {
   const [createParentId, setCreateParentId] = useState('')
   const [query, setQuery] = useState('')
   const [importing, setImporting] = useState(false)
-  // Ids of parent pages whose children are collapsed in the sidebar tree.
-  const [collapsed, setCollapsed] = useState(() => new Set())
+  // Ids of parent pages whose children are collapsed in the sidebar tree,
+  // persisted per campaign (per browser) so the choice survives navigation.
+  const collapseKey = `grimoire_wiki_collapsed_${campaign.id}`
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(collapseKey) || '[]'))
+    } catch {
+      return new Set()
+    }
+  })
   const dragId = useRef(null)
   // Live drop indicator: { id, where: 'before' | 'after' | 'inside' }.
   const [dropTarget, setDropTarget] = useState(null)
@@ -705,6 +718,11 @@ export default function WikiView({ campaign, isOwner }) {
     setCollapsed((prev) => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
+      try {
+        localStorage.setItem(collapseKey, JSON.stringify([...next]))
+      } catch {
+        // localStorage unavailable (private mode); collapse state stays in memory only.
+      }
       return next
     })
 
@@ -1269,6 +1287,7 @@ export default function WikiView({ campaign, isOwner }) {
             >
               <WikiMarkdown
                 body={page.body}
+                campaignId={campaign.id}
                 pageSlugs={pages.map((p) => p.slug)}
                 onOpenSlug={openSlug}
               />

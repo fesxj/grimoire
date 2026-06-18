@@ -1103,7 +1103,14 @@
     "chooseFile": "Choisir un fichier",
     "importing": "Importation…",
     "imported": "{{count}} page importée",
-    "imported_other": "{{count}} pages importées"
+    "imported_other": "{{count}} pages importées",
+    "embed_file": "Fichier",
+    "uploadImage": "Téléverser une image",
+    "uploadAndEmbed": "Téléverser et intégrer",
+    "noLinkedResources": "Aucune ressource liée pour le moment. Liez d’abord des livres, cartes ou jetons dans le panneau Ressources.",
+    "imageCategory": "Classer l’image dans une catégorie",
+    "newCategoryPlaceholder": "Nom de la nouvelle catégorie",
+    "chooseImage": "Choisir une image"
   },
   "campaignNotes": {
     "backToOverview": "Retour à l'aperçu"
@@ -1120,7 +1127,8 @@
     "leaveUncategorized": "Laisser les éléments non classés",
     "deletePages": "Supprimer les pages",
     "unlinkResources": "Délier les ressources",
-    "iconLabel": "Icône"
+    "iconLabel": "Icône",
+    "builtIn": "Intégré"
   },
   "iconPicker": {
     "label": "Choisir une icône",

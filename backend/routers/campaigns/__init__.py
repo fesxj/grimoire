@@ -53,6 +53,7 @@ from .uploads import (
     get_member_sheet,
     delete_member_sheet,
     upload_campaign_file,
+    upload_campaign_image,
     get_campaign_file,
 )
 from .sheets import (
@@ -77,6 +78,7 @@ from .categories import (
     create_category,
     update_category,
     reorder_categories,
+    set_resource_group_order,
     delete_category,
 )
 
@@ -271,6 +273,13 @@ router.add_api_route(
     status_code=201,
 )
 router.add_api_route(
+    "/{campaign_id}/images",
+    upload_campaign_image,
+    methods=["POST"],
+    summary="Upload an image (GM); links it as an image resource for note embedding",
+    status_code=201,
+)
+router.add_api_route(
     "/{campaign_id}/files/{file_id}",
     get_campaign_file,
     methods=["GET"],
@@ -450,6 +459,12 @@ router.add_api_route(
     reorder_categories,
     methods=["PUT"],
     summary="Reorder categories",
+)
+router.add_api_route(
+    "/{campaign_id}/resource-group-order",
+    set_resource_group_order,
+    methods=["PUT"],
+    summary="Set the resource panel's group display order (categories + type groups)",
 )
 router.add_api_route(
     "/{campaign_id}/categories/{category_id}",

@@ -82,6 +82,12 @@ class CategoryReorder(BaseModel):
     ordered_ids: List[str]
 
 
+class ResourceGroupOrder(BaseModel):
+    # Ordered list of group keys ("type:book"/"type:map"/"type:token"/"type:file"
+    # and "cat:<category_id>") defining the resource panel's group display order.
+    ordered_keys: List[str]
+
+
 class SessionNoteCreate(BaseModel):
     session_date: str  # YYYY-MM-DD
     title: str = ""

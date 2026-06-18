@@ -1540,6 +1540,60 @@ class TestCategories:
         listed = client.get(f"/api/campaigns/{cid}/resources", headers=gm_headers).json()
         assert not any(r["id"] == res["id"] for r in listed)
 
+    def test_resource_group_order_persists(self, client, gm_headers, campaign):
+        cid = campaign["id"]
+        cat = client.post(
+            f"/api/campaigns/{cid}/categories",
+            json={"name": "Handouts", "kind": "resource"},
+            headers=gm_headers,
+        ).json()
+        # A campaign starts with an empty (default) group order.
+        assert client.get(f"/api/campaigns/{cid}", headers=gm_headers).json()[
+            "resource_group_order"
+        ] == []
+        order = ["type:map", f"cat:{cat['id']}", "type:book"]
+        resp = client.put(
+            f"/api/campaigns/{cid}/resource-group-order",
+            json={"ordered_keys": order},
+            headers=gm_headers,
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["resource_group_order"] == order
+        # Survives a re-fetch.
+        assert (
+            client.get(f"/api/campaigns/{cid}", headers=gm_headers).json()["resource_group_order"]
+            == order
+        )
+
+    def test_resource_group_order_drops_unknown_keys(self, client, gm_headers, campaign):
+        cid = campaign["id"]
+        resp = client.put(
+            f"/api/campaigns/{cid}/resource-group-order",
+            json={"ordered_keys": ["type:book", "cat:does-not-exist", "bogus", "type:book"]},
+            headers=gm_headers,
+        )
+        # Unknown category, bogus key, and the duplicate are all dropped.
+        assert resp.json()["resource_group_order"] == ["type:book"]
+
+    def test_resource_group_order_requires_owner(
+        self, client, gm_headers, player_headers, player_id, campaign
+    ):
+        cid = campaign["id"]
+        client.post(
+            f"/api/campaigns/{cid}/invite", json={"user_id": player_id}, headers=gm_headers
+        )
+        client.patch(
+            f"/api/campaigns/{cid}/members/{player_id}",
+            json={"status": "accepted"},
+            headers=player_headers,
+        )
+        resp = client.put(
+            f"/api/campaigns/{cid}/resource-group-order",
+            json={"ordered_keys": ["type:book"]},
+            headers=player_headers,
+        )
+        assert resp.status_code == 403
+
 
 # ---------------------------------------------------------------------------
 # Campaign file uploads + admin limits + character sheet URL
@@ -1640,6 +1694,61 @@ class TestCampaignFileUploads:
             headers=player_headers,
         )
         assert resp.status_code == 403
+
+    def test_uploaded_image_file_is_flagged(self, client, gm_headers, campaign):
+        resp = client.post(
+            f"/api/campaigns/{campaign['id']}/files",
+            files={"file": ("art.png", _png_bytes(), "image/png")},
+            headers=gm_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["is_image"] is True
+        listed = client.get(f"/api/campaigns/{campaign['id']}/resources", headers=gm_headers).json()
+        row = next(r for r in listed if r["resource_type"] == "file")
+        # An image file is its own thumbnail.
+        assert row["is_image"] is True
+        assert row["has_thumbnail"] is True
+
+    def test_image_upload_new_category(self, client, gm_headers, campaign):
+        cid = campaign["id"]
+        resp = client.post(
+            f"/api/campaigns/{cid}/images",
+            files={"file": ("npc.png", _png_bytes(), "image/png")},
+            data={"new_category_name": "NPC art"},
+            headers=gm_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["is_image"] is True
+        assert body["category_id"]
+        # The category was created and the image filed under it.
+        cats = client.get(f"/api/campaigns/{cid}/categories?kind=resource", headers=gm_headers).json()
+        cat = next(c for c in cats if c["name"] == "NPC art")
+        assert body["category_id"] == cat["id"]
+
+    def test_image_upload_existing_category(self, client, gm_headers, campaign):
+        cid = campaign["id"]
+        cat = client.post(
+            f"/api/campaigns/{cid}/categories",
+            json={"name": "Handouts", "kind": "resource"},
+            headers=gm_headers,
+        ).json()
+        resp = client.post(
+            f"/api/campaigns/{cid}/images",
+            files={"file": ("map.png", _png_bytes(), "image/png")},
+            data={"category_id": cat["id"]},
+            headers=gm_headers,
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["category_id"] == cat["id"]
+
+    def test_image_upload_rejects_non_image(self, client, gm_headers, campaign):
+        resp = client.post(
+            f"/api/campaigns/{campaign['id']}/images",
+            files={"file": ("notes.pdf", b"%PDF-1.4 fake", "application/pdf")},
+            headers=gm_headers,
+        )
+        assert resp.status_code == 400
 
 
 class TestCharacterSheetUrl:

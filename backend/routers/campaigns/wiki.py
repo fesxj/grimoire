@@ -25,7 +25,7 @@ from ._helpers import (
 from ._schemas import WikiPageCreate, WikiPageUpdate, WikiReorder
 
 # Reserved prefixes for Grimoire content embeds — not page-title links.
-_EMBED_PREFIXES = ("book:", "map:", "token:")
+_EMBED_PREFIXES = ("book:", "map:", "token:", "file:", "image:")
 
 # Matches [[target]] or [[target|label]]; target/label captured separately.
 _LINK_RE = re.compile(r"\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]")

@@ -10,6 +10,7 @@ import {
   LuSearch,
   LuX,
   LuChevronRight,
+  LuChevronDown,
   LuFolder,
   LuFolderCog,
   LuFile,
@@ -57,9 +58,11 @@ function ResourceRow({
   const { Icon } = TYPE_ICONS[resource.resource_type] || { Icon: LuBookOpen }
   const isBook = resource.resource_type === 'book'
   const isFile = resource.resource_type === 'file'
+  const isImage = isFile && resource.is_image
 
-  const thumbUrl =
-    resource.has_thumbnail && !isFile
+  const thumbUrl = isImage
+    ? campaigns.fileUrl(campaignId, resource.resource_id)
+    : resource.has_thumbnail && !isFile
       ? mediaUrl(
           `/${isBook ? 'books' : resource.resource_type + 's'}/${resource.resource_id}/thumbnail`
         )
@@ -524,7 +527,7 @@ function ResourcePicker({ campaignId, linkedIds, onAdd, onClose }) {
   )
 }
 
-export default function ResourcesPanel({ campaign, isOwner }) {
+export default function ResourcesPanel({ campaign, isOwner, onRefresh }) {
   const { t } = useTranslation()
   const { user } = useAuth()
   const ui = useUISettings()
@@ -539,11 +542,37 @@ export default function ResourcesPanel({ campaign, isOwner }) {
 
   const [resources, setResources] = useState(null)
   const [categories, setCategories] = useState([])
+  // Local copy of the saved group order, so reordering reflects instantly without
+  // waiting on a full campaign reload. Re-synced when the campaign prop changes.
+  const [groupOrder, setGroupOrder] = useState(campaign.resource_group_order || [])
   const [adding, setAdding] = useState(false)
   const [managingCats, setManagingCats] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef(null)
   const dragId = useRef(null)
+
+  // Which group sections are collapsed, persisted per campaign so the choice
+  // survives navigation. Keyed by group key (category id or built-in type).
+  const collapseKey = `grimoire_resource_collapsed_${campaign.id}`
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(collapseKey) || '[]'))
+    } catch {
+      return new Set()
+    }
+  })
+  const toggleCollapse = (key) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      try {
+        localStorage.setItem(collapseKey, JSON.stringify([...next]))
+      } catch {
+        // localStorage unavailable (private mode); collapse state stays in memory only.
+      }
+      return next
+    })
+  }
 
   const load = () => {
     campaigns
@@ -562,6 +591,10 @@ export default function ResourcesPanel({ campaign, isOwner }) {
     load()
     loadCategories()
   }, [campaign.id])
+
+  useEffect(() => {
+    setGroupOrder(campaign.resource_group_order || [])
+  }, [campaign.resource_group_order])
 
   const members = (campaign.members || []).filter((m) => !m.is_owner)
 
@@ -611,7 +644,7 @@ export default function ResourcesPanel({ campaign, isOwner }) {
     dragId.current = null
     if (!id) return
     // Dropping onto a custom category sets category_id; onto a type group clears it.
-    const target = group.custom ? group.key : ''
+    const target = group.custom ? group.catId : ''
     const res = resources.find((r) => r.id === id)
     if (res && (res.category_id || '') !== target) {
       await setCategory(id, target)
@@ -649,15 +682,34 @@ export default function ResourcesPanel({ campaign, isOwner }) {
   const groups = []
   for (const cat of sortedCats) {
     const items = resources.filter((r) => r.category_id === cat.id)
-    groups.push({ key: cat.id, label: cat.name, custom: true, icon: cat.icon, items })
+    groups.push({
+      key: `cat:${cat.id}`,
+      catId: cat.id,
+      label: cat.name,
+      custom: true,
+      icon: cat.icon,
+      items,
+    })
   }
   for (const type of Object.keys(TYPE_ICONS)) {
     const items = resources.filter(
       (r) => r.resource_type === type && (!r.category_id || !catById.has(r.category_id))
     )
-    if (items.length) groups.push({ key: type, label: TYPE_LABELS[type], type, items })
+    groups.push({ key: `type:${type}`, label: TYPE_LABELS[type], type, items })
   }
-  const visibleGroups = groups.filter((g) => g.items.length > 0 || g.custom)
+  // Apply the GM's saved group order; groups not listed keep their default
+  // relative order at the end. A type group with no items is hidden unless the GM
+  // has explicitly placed it (so an empty Books group can still be reordered).
+  const order = groupOrder || []
+  const orderIndex = (key) => {
+    const i = order.indexOf(key)
+    return i === -1 ? order.length + groups.findIndex((g) => g.key === key) : i
+  }
+  groups.sort((a, b) => orderIndex(a.key) - orderIndex(b.key))
+  const orderedSet = new Set(order)
+  const visibleGroups = groups.filter(
+    (g) => g.items.length > 0 || g.custom || orderedSet.has(g.key)
+  )
 
   return (
     <div>
@@ -735,6 +787,7 @@ export default function ResourcesPanel({ campaign, isOwner }) {
         >
           {visibleGroups.map((g) => {
             const TypeIcon = g.type ? TYPE_ICONS[g.type].Icon : LuFolder
+            const isCollapsed = collapsed.has(g.key)
             return (
               <section
                 key={g.key}
@@ -742,8 +795,12 @@ export default function ResourcesPanel({ campaign, isOwner }) {
                 onDrop={isOwner ? () => onDropToGroup(g) : undefined}
                 style={{ marginBottom: 4 }}
               >
-                <h4
+                <button
+                  type="button"
+                  onClick={() => toggleCollapse(g.key)}
+                  aria-expanded={!isCollapsed}
                   style={{
+                    width: '100%',
                     fontSize: 12,
                     fontWeight: 600,
                     color: 'var(--text-muted)',
@@ -753,12 +810,23 @@ export default function ResourcesPanel({ campaign, isOwner }) {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
+                    background: 'none',
+                    border: 'none',
+                    padding: 0,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    font: 'inherit',
                   }}
                 >
+                  {isCollapsed ? (
+                    <LuChevronRight size={13} aria-hidden="true" style={{ flexShrink: 0 }} />
+                  ) : (
+                    <LuChevronDown size={13} aria-hidden="true" style={{ flexShrink: 0 }} />
+                  )}
                   <CampaignIcon name={g.icon} fallback={TypeIcon} size={12} /> {g.label} (
                   {g.items.length})
-                </h4>
-                {g.items.length === 0 ? (
+                </button>
+                {isCollapsed ? null : g.items.length === 0 ? (
                   <div
                     style={{
                       fontSize: 12,
@@ -804,10 +872,17 @@ export default function ResourcesPanel({ campaign, isOwner }) {
         <CategoryManager
           campaignId={campaign.id}
           kind="resource"
+          typeGroups={Object.keys(TYPE_ICONS).map((type) => ({
+            key: `type:${type}`,
+            label: TYPE_LABELS[type],
+          }))}
+          groupOrder={groupOrder}
+          onGroupOrderChange={(next) => setGroupOrder(next)}
           onClose={() => setManagingCats(false)}
           onChanged={() => {
             loadCategories()
             load()
+            onRefresh?.()
           }}
         />
       )}

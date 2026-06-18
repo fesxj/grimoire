@@ -142,6 +142,7 @@ def serialize_campaign(c: Campaign, members: list, db) -> dict:
         "has_schedule": schedule is not None,
         "next_session": next_session,
         "has_banner": bool(c.banner_path),
+        "resource_group_order": c.resource_group_order or [],
         # True when the owner's campaign access is disabled — the campaign is then
         # read-only for everyone (players keep view access, lose all writes).
         "locked": not owner_has_access,

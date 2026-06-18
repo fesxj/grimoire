@@ -36,6 +36,13 @@ class Campaign(Base):
     # Relative filename of the campaign banner, stored under DATA_PATH/campaign_uploads/banners/
     banner_path = Column(String(255), nullable=True)
 
+    # Manual display order for the resource panel's groups, interleaving the
+    # built-in type groups (keys "type:book", "type:map", "type:token",
+    # "type:file") with GM-defined categories (key "cat:<category_id>"). A list of
+    # those keys; groups absent from the list fall to the end in their default
+    # order. Empty/null means "use the default order" (categories then types).
+    resource_group_order = Column(JSON, default=list)
+
     created_at = Column(DateTime, default=_utcnow)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow)
     # Last time any user opened the campaign — drives "recently accessed" sorting.
@@ -339,6 +346,9 @@ class CampaignFile(Base):
     filename = Column(String(255), nullable=False)  # original upload name
     mime_type = Column(String(100), default="application/octet-stream")
     size_bytes = Column(Integer, default=0)
+    # True for image uploads (PNG/JPEG/WebP/GIF), so the UI can render them inline
+    # (e.g. embedded in a wiki note) and show a thumbnail instead of a file card.
+    is_image = Column(Boolean, default=False)
     uploaded_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
 
     created_at = Column(DateTime, default=_utcnow)

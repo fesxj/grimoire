@@ -1035,7 +1035,14 @@
     "chooseFile": null,
     "importing": null,
     "imported": null,
-    "imported_other": null
+    "imported_other": null,
+    "embed_file": "Datei",
+    "uploadImage": "Bild hochladen",
+    "uploadAndEmbed": "Hochladen & einbetten",
+    "noLinkedResources": "Noch keine verknüpften Ressourcen. Verknüpfe zuerst Bücher, Karten oder Tokens im Ressourcen-Bereich.",
+    "imageCategory": "Bild einer Kategorie zuordnen",
+    "newCategoryPlaceholder": "Name der neuen Kategorie",
+    "chooseImage": "Bild auswählen"
   },
   "campaignNotes": {
     "backToOverview": null
@@ -1052,7 +1059,8 @@
     "leaveUncategorized": null,
     "deletePages": null,
     "unlinkResources": null,
-    "iconLabel": null
+    "iconLabel": null,
+    "builtIn": "Integriert"
   },
   "iconPicker": {
     "label": null,

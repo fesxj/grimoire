@@ -1,43 +1,63 @@
 import { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { LuX, LuSearch, LuBookOpen, LuMap, LuUser, LuPlus } from 'react-icons/lu'
-import { campaigns } from '../../api'
+import {
+  LuX,
+  LuSearch,
+  LuBookOpen,
+  LuMap,
+  LuUser,
+  LuFile,
+  LuImage,
+  LuPlus,
+  LuUpload,
+} from 'react-icons/lu'
+import { campaigns, mediaUrl } from '../../api'
 import Spinner from '../Spinner'
 
-const TYPE_ICON = { book: LuBookOpen, map: LuMap, token: LuUser }
+const TYPE_ICON = { book: LuBookOpen, map: LuMap, token: LuUser, file: LuFile }
 
-// Picks a Grimoire book/map/token and returns the [[...]] embed token to insert.
-export default function GrimoireEmbedPicker({ onInsert, onClose }) {
+// Picks a linked campaign resource (or uploads a new image) and returns the
+// [[...]] embed token to insert into a wiki note. Only resources already linked
+// to this campaign are listed — to embed new library content, link it first in
+// the Resources panel.
+export default function GrimoireEmbedPicker({ campaignId, onInsert, onClose }) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
-  const [loading, setLoading] = useState(false)
+  const [resources, setResources] = useState(null)
   const [pageFor, setPageFor] = useState(null) // book item awaiting a page number
   const [pageNum, setPageNum] = useState('')
-  const debounce = useRef(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
 
   useEffect(() => {
-    setLoading(true)
-    clearTimeout(debounce.current)
-    debounce.current = setTimeout(() => {
-      campaigns
-        .searchResources(query.trim())
-        .then((data) => setResults(data || []))
-        .catch(() => setResults([]))
-        .finally(() => setLoading(false))
-    }, 250)
-    return () => clearTimeout(debounce.current)
-  }, [query])
+    campaigns
+      .listResources(campaignId)
+      .then((list) => setResources(list || []))
+      .catch(() => setResources([]))
+  }, [campaignId])
 
-  const insert = (item, page) => {
-    let token
-    if (item.resource_type === 'book' && page) {
-      token = `[[book:${item.resource_id}:${page}]]`
-    } else {
-      token = `[[${item.resource_type}:${item.resource_id}]]`
+  // The embed token for a resource. Images use the `image:` prefix so they render
+  // inline; other files use `file:`; books optionally carry a page number.
+  const tokenFor = (item, page) => {
+    if (item.resource_type === 'file') {
+      return item.is_image ? `[[image:${item.resource_id}]]` : `[[file:${item.resource_id}]]`
     }
-    onInsert(token)
+    if (item.resource_type === 'book' && page) {
+      return `[[book:${item.resource_id}:${page}]]`
+    }
+    return `[[${item.resource_type}:${item.resource_id}]]`
   }
+
+  const insert = (item, page) => onInsert(tokenFor(item, page))
+
+  const handleUploaded = (created) => {
+    setUploadOpen(false)
+    // The new image is a linked resource; embed it immediately.
+    onInsert(`[[image:${created.resource_id}]]`)
+  }
+
+  const filtered = (resources || []).filter((r) =>
+    (r.name || '').toLowerCase().includes(query.trim().toLowerCase())
+  )
 
   return (
     <div
@@ -86,135 +106,319 @@ export default function GrimoireEmbedPicker({ onInsert, onClose }) {
           {t('wiki.embedPickerTitle')}
         </h3>
 
-        <div style={{ position: 'relative', marginBottom: 12 }}>
-          <LuSearch
-            size={14}
-            style={{
-              position: 'absolute',
-              left: 10,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--text-muted)',
-            }}
+        {uploadOpen ? (
+          <ImageUploadPanel
+            campaignId={campaignId}
+            onUploaded={handleUploaded}
+            onCancel={() => setUploadOpen(false)}
           />
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('wiki.embedSearchPlaceholder')}
-            style={{
-              width: '100%',
-              padding: '9px 12px 9px 32px',
-              background: 'var(--bg-deep)',
-              border: '1px solid var(--border)',
-              borderRadius: 8,
-              color: 'var(--text)',
-              fontSize: 14,
-              boxSizing: 'border-box',
-            }}
-          />
-        </div>
-
-        <div style={{ overflowY: 'auto', flex: 1 }}>
-          {loading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
-              <Spinner size={18} />
-            </div>
-          ) : results.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '10px 4px' }}>
-              {t('common.noResults')}
-            </div>
-          ) : (
-            results.map((item) => {
-              const Icon = TYPE_ICON[item.resource_type] || LuBookOpen
-              const key = `${item.resource_type}:${item.resource_id}`
-              const awaitingPage = pageFor === key
-              return (
-                <div
-                  key={key}
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <LuSearch
+                  size={14}
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '8px 6px',
-                    borderBottom: '1px solid var(--border)',
+                    position: 'absolute',
+                    left: 10,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--text-muted)',
                   }}
-                >
-                  <Icon size={15} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t('wiki.embedSearchPlaceholder')}
+                  style={{
+                    width: '100%',
+                    padding: '9px 12px 9px 32px',
+                    background: 'var(--bg-deep)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    color: 'var(--text)',
+                    fontSize: 14,
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+              <button
+                onClick={() => setUploadOpen(true)}
+                style={miniBtn}
+                title={t('wiki.uploadImage')}
+              >
+                <LuImage size={14} /> {t('wiki.uploadImage')}
+              </button>
+            </div>
+
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {resources === null ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: 20 }}>
+                  <Spinner size={18} />
+                </div>
+              ) : filtered.length === 0 ? (
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '10px 4px' }}>
+                  {resources.length === 0 ? t('wiki.noLinkedResources') : t('common.noResults')}
+                </div>
+              ) : (
+                filtered.map((item) => {
+                  const isImage = item.resource_type === 'file' && item.is_image
+                  const Icon = isImage ? LuImage : TYPE_ICON[item.resource_type] || LuBookOpen
+                  const key = item.id
+                  const awaitingPage = pageFor === key
+                  const thumbUrl = thumbnailUrl(campaignId, item)
+                  return (
                     <div
+                      key={key}
                       style={{
-                        fontSize: 13,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '8px 6px',
+                        borderBottom: '1px solid var(--border)',
                       }}
                     >
-                      {item.name}
-                    </div>
-                    {item.subtitle && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {item.subtitle}
-                      </div>
-                    )}
-                  </div>
-
-                  {awaitingPage ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <input
-                        type="number"
-                        min="1"
-                        value={pageNum}
-                        onChange={(e) => setPageNum(e.target.value)}
-                        placeholder={t('wiki.pageNum')}
-                        aria-label={t('wiki.pageNum')}
+                      <div
                         style={{
-                          width: 64,
-                          padding: '4px 6px',
+                          width: 28,
+                          height: 28,
+                          borderRadius: 4,
+                          flexShrink: 0,
+                          overflow: 'hidden',
                           background: 'var(--bg-deep)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 6,
-                          color: 'var(--text)',
-                          fontSize: 12,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
-                      />
-                      <button
-                        onClick={() => insert(item, pageNum || null)}
-                        style={miniBtn}
-                        title={t('wiki.insert')}
                       >
-                        {t('wiki.insert')}
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {item.resource_type === 'book' && (
-                        <button
-                          onClick={() => {
-                            setPageFor(key)
-                            setPageNum('')
+                        {thumbUrl ? (
+                          <img
+                            src={thumbUrl}
+                            alt=""
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        ) : (
+                          <Icon size={15} style={{ color: 'var(--text-muted)' }} />
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 13,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
                           }}
-                          style={miniBtnGhost}
-                          title={t('wiki.withPage')}
                         >
-                          {t('wiki.withPage')}
-                        </button>
+                          {item.name}
+                        </div>
+                      </div>
+
+                      {awaitingPage ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <input
+                            type="number"
+                            min="1"
+                            value={pageNum}
+                            onChange={(e) => setPageNum(e.target.value)}
+                            placeholder={t('wiki.pageNum')}
+                            aria-label={t('wiki.pageNum')}
+                            style={{
+                              width: 64,
+                              padding: '4px 6px',
+                              background: 'var(--bg-deep)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 6,
+                              color: 'var(--text)',
+                              fontSize: 12,
+                            }}
+                          />
+                          <button
+                            onClick={() => insert(item, pageNum || null)}
+                            style={miniBtn}
+                            title={t('wiki.insert')}
+                          >
+                            {t('wiki.insert')}
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {item.resource_type === 'book' && (
+                            <button
+                              onClick={() => {
+                                setPageFor(key)
+                                setPageNum('')
+                              }}
+                              style={miniBtnGhost}
+                              title={t('wiki.withPage')}
+                            >
+                              {t('wiki.withPage')}
+                            </button>
+                          )}
+                          <button onClick={() => insert(item, null)} style={miniBtn}>
+                            <LuPlus size={13} /> {t('wiki.insert')}
+                          </button>
+                        </div>
                       )}
-                      <button onClick={() => insert(item, null)} style={miniBtn}>
-                        <LuPlus size={13} /> {t('wiki.insert')}
-                      </button>
                     </div>
-                  )}
-                </div>
-              )
-            })
-          )}
-        </div>
+                  )
+                })
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
 }
 
+// Thumbnail URL for a resource row, or null when there's nothing to show.
+function thumbnailUrl(campaignId, item) {
+  if (item.resource_type === 'file') {
+    return item.is_image ? campaigns.fileUrl(campaignId, item.resource_id) : null
+  }
+  if (!item.has_thumbnail) return null
+  const seg = item.resource_type === 'book' ? 'books' : `${item.resource_type}s`
+  return mediaUrl(`/${seg}/${item.resource_id}/thumbnail`)
+}
+
+// Upload an image, choosing an existing resource category or creating a new one.
+function ImageUploadPanel({ campaignId, onUploaded, onCancel }) {
+  const { t } = useTranslation()
+  const [categories, setCategories] = useState([])
+  const [mode, setMode] = useState('existing') // 'existing' | 'new'
+  const [categoryId, setCategoryId] = useState('')
+  const [newName, setNewName] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const fileRef = useRef(null)
+
+  useEffect(() => {
+    campaigns
+      .listCategories(campaignId, 'resource')
+      .then((list) => {
+        setCategories(list || [])
+        // Default to "new category" when the campaign has none yet.
+        if (!list || list.length === 0) setMode('new')
+      })
+      .catch(() => setCategories([]))
+  }, [campaignId])
+
+  const submit = async () => {
+    const file = fileRef.current?.files?.[0]
+    if (!file) {
+      setError(t('wiki.chooseImage'))
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const opts =
+        mode === 'new' ? { newCategoryName: newName.trim() } : categoryId ? { categoryId } : {}
+      const created = await campaigns.uploadImage(campaignId, file, opts)
+      onUploaded(created)
+    } catch (e) {
+      setError(e.message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        aria-label={t('wiki.chooseImage')}
+        style={{ fontSize: 13, color: 'var(--text-dim)' }}
+      />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
+          {t('wiki.imageCategory')}
+        </div>
+        <label style={radioRow}>
+          <input
+            type="radio"
+            name="catmode"
+            checked={mode === 'existing'}
+            onChange={() => setMode('existing')}
+            disabled={categories.length === 0}
+          />
+          <select
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+            disabled={mode !== 'existing' || categories.length === 0}
+            aria-label={t('resources.categoryLabel')}
+            style={{ ...selectStyle, flex: 1 }}
+          >
+            <option value="">{t('resources.typeGroup')}</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={radioRow}>
+          <input
+            type="radio"
+            name="catmode"
+            checked={mode === 'new'}
+            onChange={() => setMode('new')}
+          />
+          <input
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            onFocus={() => setMode('new')}
+            placeholder={t('wiki.newCategoryPlaceholder')}
+            aria-label={t('wiki.newCategoryPlaceholder')}
+            style={{
+              flex: 1,
+              padding: '6px 8px',
+              background: 'var(--bg-deep)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              color: 'var(--text)',
+              fontSize: 13,
+            }}
+          />
+        </label>
+      </div>
+
+      {error && <div style={{ color: 'var(--danger)', fontSize: 13 }}>{error}</div>}
+
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button onClick={onCancel} style={miniBtnGhost}>
+          {t('common.cancel')}
+        </button>
+        <button
+          onClick={submit}
+          disabled={busy || (mode === 'new' && !newName.trim())}
+          style={miniBtn}
+        >
+          <LuUpload size={13} /> {busy ? t('resources.uploading') : t('wiki.uploadAndEmbed')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+const radioRow = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+}
+const selectStyle = {
+  appearance: 'auto',
+  fontSize: 13,
+  padding: '6px 8px',
+  background: 'var(--bg-deep)',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+  color: 'var(--text)',
+}
 const miniBtn = {
   display: 'inline-flex',
   alignItems: 'center',

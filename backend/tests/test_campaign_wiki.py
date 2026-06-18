@@ -261,6 +261,19 @@ class TestWikiLinks:
         # No stub page should be created for an embed target.
         assert not any(p["slug"].startswith("book") for p in listed)
 
+    def test_file_and_image_embeds_not_page_links(self, client, gm_headers, gm_campaign):
+        cid = gm_campaign["id"]
+        _create(
+            client,
+            gm_headers,
+            cid,
+            title="WithFileEmbeds",
+            body="[[image:img123]] and [[file:doc456]]",
+        )
+        listed = client.get(f"/api/campaigns/{cid}/wiki", headers=gm_headers).json()
+        # File/image embeds must not auto-create stub pages.
+        assert not any(p["slug"].startswith(("image", "file")) for p in listed)
+
     def test_stub_inherits_source_visibility(self, client, gm_headers, gm_campaign):
         cid = gm_campaign["id"]
         _create(client, gm_headers, cid, title="GroupHub", body="[[Sub Page]]", visibility="group")

@@ -15,9 +15,15 @@ from ...auth import CurrentUser, get_current_user
 from ...config import SessionLocal
 from ...models import CampaignCategory, CampaignResource, WikiPage, WikiPageLink
 from ._helpers import assert_can_manage, can_view, get_campaign_or_404
-from ._schemas import CategoryCreate, CategoryReorder, CategoryUpdate
+from ._schemas import (
+    CategoryCreate,
+    CategoryReorder,
+    CategoryUpdate,
+    ResourceGroupOrder,
+)
 
 _KINDS = ("note", "resource")
+_TYPE_GROUP_KEYS = ("type:book", "type:map", "type:token", "type:file")
 
 
 def _serialize(cat: CampaignCategory) -> dict:
@@ -142,6 +148,47 @@ def reorder_categories(
                 order += 1
         db.commit()
         return {"ok": True}
+    finally:
+        db.close()
+
+
+def set_resource_group_order(
+    campaign_id: str,
+    data: ResourceGroupOrder,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Persist the display order of the resource panel's groups.
+
+    Accepts an ordered list of group keys mixing the built-in type groups
+    ("type:book" etc.) with resource categories ("cat:<id>"). Unknown keys and
+    type-group keys are stored verbatim so the order survives; category keys are
+    validated against this campaign's resource categories and silently dropped if
+    they no longer exist.
+    """
+    db = SessionLocal()
+    try:
+        c = get_campaign_or_404(db, campaign_id)
+        assert_can_manage(c, current_user, db)
+        valid_cat_ids = {
+            cat.id
+            for cat in db.query(CampaignCategory)
+            .filter_by(campaign_id=campaign_id, kind="resource")
+            .all()
+        }
+        cleaned = []
+        seen = set()
+        for key in data.ordered_keys:
+            if key in seen:
+                continue
+            if key in _TYPE_GROUP_KEYS:
+                cleaned.append(key)
+                seen.add(key)
+            elif key.startswith("cat:") and key[4:] in valid_cat_ids:
+                cleaned.append(key)
+                seen.add(key)
+        c.resource_group_order = cleaned
+        db.commit()
+        return {"ok": True, "resource_group_order": cleaned}
     finally:
         db.close()
 

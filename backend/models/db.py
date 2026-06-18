@@ -93,6 +93,8 @@ def init_db(db_path: str):
             "ALTER TABLE campaigns ADD COLUMN system_name VARCHAR(255)",
             "ALTER TABLE campaign_schedules ADD COLUMN enabled BOOLEAN DEFAULT 1 NOT NULL",
             "ALTER TABLE users ADD COLUMN campaign_access BOOLEAN DEFAULT 1",
+            "ALTER TABLE campaigns ADD COLUMN resource_group_order JSON DEFAULT '[]'",
+            "ALTER TABLE campaign_files ADD COLUMN is_image BOOLEAN DEFAULT 0",
         ]:
             try:
                 conn.execute(text(migration))
